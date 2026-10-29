@@ -6,9 +6,9 @@ Self-Healing Workflow Builder.
 
 The `frontend/` directory contains the React + TypeScript application, built with
 Vite and styled with Tailwind CSS.
-The frontend currently includes Describe or Upload and a sample Parse Diagram
-review page. The review graph, nodes, and edges use example data; Muse integration
-and workflow planning will be added separately.
+The frontend currently includes Describe or Upload, Parse Diagram, and Plan
+Workflow. Diagram interpretation and workflow planning use typed example data;
+Muse integration, the canvas, execution, and persistence will be added separately.
 
 ## Run locally
 
