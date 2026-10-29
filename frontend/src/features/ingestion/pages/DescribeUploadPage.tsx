@@ -3,9 +3,10 @@ import type { FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Icon } from '../../../components/ui/Icon'
 import { DiagramUpload } from '../components/DiagramUpload'
-import { useIngestionDraft } from '../hooks/useIngestionDraft'
+import type { IngestionFormState } from '../hooks/useIngestionDraft'
 import { MAX_PROMPT_LENGTH } from '../validation'
-import './DescribeUploadPage.css'
+
+const inputPanelClasses = 'min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6'
 
 const examplePrompt = 'When a new Shopify order comes in, create a deal in HubSpot and post a summary to the #sales channel in Slack.'
 const upcomingStages = [
@@ -15,84 +16,104 @@ const upcomingStages = [
   { number: '04', title: 'Repair', description: 'If a step breaks, Muse proposes a fix for you to review.' },
 ]
 
-export function DescribeUploadPage() {
-  const draft = useIngestionDraft()
+type DescribeUploadPageProps = {
+  draft: IngestionFormState
+  onContinue: () => void
+}
+
+export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProps) {
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const noticeRef = useRef<HTMLDivElement>(null)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!draft.prepareDraft()) promptRef.current?.focus()
-    else requestAnimationFrame(() => noticeRef.current?.focus())
+    const preparedDraft = draft.prepareDraft()
+    if (!preparedDraft) promptRef.current?.focus()
+    else onContinue()
   }
 
   return (
     <>
-      <div className="page-topline"><span>WORKFLOW BUILDER</span></div>
-      <header className="page-header">
-        <p className="eyebrow"><span /> STEP 1 OF 6 · INGESTION</p>
-        <h1>Describe a workflow,<br className="heading-break" /> or show us one.</h1>
-        <p className="page-intro">Start with an idea. Describe what you want to automate, upload a diagram,<br className="intro-break" /> or use both. We’ll help you connect the dots.</p>
+      <div className="text-[9px] font-semibold tracking-[1.5px] text-muted">WORKFLOW BUILDER</div>
+      <header className="mt-8 mb-7 md:mt-10 md:mb-8">
+        <p className="mb-4 flex items-center gap-2 text-[10px] font-bold tracking-[1.4px] text-accent">
+          <span className="size-1.5 rounded-full bg-accent" /> STEP 1 OF 6 · INGESTION
+        </p>
+        <h1 className="mb-4 text-[clamp(2rem,3.4vw,2.9375rem)] leading-[1.13] font-[650] tracking-[-1.1px] md:tracking-[-1.9px]">
+          Describe a workflow,<br className="hidden xl:block 2xl:hidden" /> or show us one.
+        </h1>
+        <p className="text-xs leading-[1.8] text-muted md:text-[13px]">
+          Start with an idea. Describe what you want to automate, upload a diagram,<br className="hidden xl:block" /> or use both. We’ll help you connect the dots.
+        </p>
       </header>
 
       <form onSubmit={handleSubmit} noValidate>
-        <div className="input-panels">
-          <section className="input-panel" aria-labelledby="describe-heading">
-            <div className="panel-heading">
-              <div className="panel-title"><Icon name="text" /><h2 id="describe-heading">Describe it</h2></div>
-              <span className="input-label">PLAIN LANGUAGE</span>
+        <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:gap-5">
+          <section className={inputPanelClasses} aria-labelledby="describe-heading">
+            <div className="mb-6 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Icon name="text" className="size-4.5 text-accent" />
+                <h2 className="text-sm font-semibold tracking-tight" id="describe-heading">Describe it</h2>
+              </div>
+              <span className="text-[8px] tracking-[1px] whitespace-nowrap text-muted">PLAIN LANGUAGE</span>
             </div>
-            <label className="prompt-label" htmlFor="workflow-prompt">What would you like to automate?</label>
-            <div className="textarea-container">
+            <label className="mb-3 block text-[11px] leading-relaxed text-muted" htmlFor="workflow-prompt">What would you like to automate?</label>
+            <div className="relative">
               <textarea ref={promptRef} id="workflow-prompt" name="prompt" value={draft.prompt}
+                className="block min-h-52 w-full resize-y rounded-lg border border-slate-200 bg-[#fcfcfd] px-4 pt-4 pb-9 text-xs leading-[1.85] text-ink transition-[border-color,outline-color,box-shadow] duration-200 placeholder:text-[#858a96] focus:border-accent focus:outline-3 focus:outline-offset-0 focus:outline-accent-soft aria-invalid:border-danger motion-reduce:transition-none"
                 maxLength={MAX_PROMPT_LENGTH} aria-describedby={`prompt-tip prompt-count${draft.formError ? ' form-error' : ''}`}
                 aria-invalid={draft.formError ? true : undefined}
                 placeholder={'When something happens in one app,\ndo something in another…'}
                 onChange={(event) => draft.updatePrompt(event.target.value)} />
-              <span id="prompt-count" className="character-count">{draft.prompt.length.toLocaleString()} / 4,000</span>
+              <span id="prompt-count" className="pointer-events-none absolute right-3 bottom-3 text-[9px] text-muted">{draft.prompt.length.toLocaleString()} / 4,000</span>
             </div>
-            <div className="prompt-footer"><span id="prompt-tip">Name the apps, the trigger, and the action.</span>
-              <Button variant="text" onClick={() => { draft.updatePrompt(examplePrompt); promptRef.current?.focus() }}>Try an example <Icon name="arrow" width="13" height="13" /></Button>
+            <div className="mt-3 flex items-start justify-between gap-2.5 md:max-xl:flex-col md:max-xl:gap-1.5">
+              <span id="prompt-tip" className="max-w-44 text-[9px] leading-[1.8] text-muted md:max-xl:max-w-none">Name the apps, the trigger, and the action.</span>
+              <Button variant="text" size="inline" onClick={() => { draft.updatePrompt(examplePrompt); promptRef.current?.focus() }}>Try an example <Icon name="arrow" width="13" height="13" /></Button>
             </div>
           </section>
 
-          <section className="input-panel" aria-labelledby="upload-heading">
-            <div className="panel-heading">
-              <div className="panel-title"><Icon name="upload" /><h2 id="upload-heading">Upload a diagram</h2></div>
-              <span className="input-label">OPTIONAL</span>
+          <section className={inputPanelClasses} aria-labelledby="upload-heading">
+            <div className="mb-6 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Icon name="upload" className="size-4.5 text-accent" />
+                <h2 className="text-sm font-semibold tracking-tight" id="upload-heading">Upload a diagram</h2>
+              </div>
+              <span className="text-[8px] tracking-[1px] text-muted">OPTIONAL</span>
             </div>
-            <p className="panel-description">Already mapped it out? Show us what you have.</p>
+            <p className="mb-3 text-[11px] leading-relaxed text-muted">Already mapped it out? Show us what you have.</p>
             <DiagramUpload file={draft.diagram} previewUrl={draft.previewUrl} error={draft.fileError}
               onSelect={draft.selectFiles} onRemove={draft.removeDiagram} />
           </section>
         </div>
 
-        <section className="next-section" aria-labelledby="next-heading">
-          <div className="next-section-heading"><h2 id="next-heading">From idea to automation</h2><span className="muse-label"><Icon name="sparkle" width="13" height="13" /> Built around Muse AI</span></div>
-          <div className="upcoming-stages">
-            {upcomingStages.map((stage) => <div className="upcoming-stage" key={stage.number}>
-              <span className="upcoming-number">{stage.number}</span>
-              <h3>{stage.title}</h3><p>{stage.description}</p>
+        <section className="mt-6 rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="next-heading">
+          <div className="mb-4 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+            <h2 className="text-xs font-semibold tracking-tight" id="next-heading">From idea to automation</h2>
+            <span className="flex items-center gap-1.5 text-[9px] text-muted"><Icon name="sparkle" width="13" height="13" className="text-accent" /> Built around Muse AI</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 xl:gap-3.5">
+            {upcomingStages.map((stage) => <div className="rounded-md border border-[#eff0f3] bg-[#f9f9fb] p-3 xl:p-3.5" key={stage.number}>
+              <span className="text-[9px] font-semibold text-accent">{stage.number}</span>
+              <h3 className="mt-2 mb-1.5 text-[11px] font-semibold">{stage.title}</h3>
+              <p className="text-[10px] leading-[1.7] text-muted">{stage.description}</p>
             </div>)}
           </div>
         </section>
 
-        {draft.formError && <p className="form-error" id="form-error" role="alert"><Icon name="info" width="17" height="17" />{draft.formError}</p>}
-        {draft.readyDraft && <div className="integration-notice" ref={noticeRef} tabIndex={-1} role="status">
-          <Icon name="info" />
-          <div><strong>{draft.readyDraft.nextStep === 'parse-diagram' ? 'Your diagram is ready for parsing.' : 'Your description is ready for planning.'}</strong>
-            <p>Muse integration is not connected yet. Your inputs stay here; no file has been uploaded and no workflow has been generated.</p>
-          </div>
-        </div>}
+        {draft.formError && <p className="mt-5 flex items-center gap-2 text-xs text-danger motion-safe:animate-reveal" id="form-error" role="alert"><Icon name="info" width="17" height="17" className="shrink-0" />{draft.formError}</p>}
 
-        <div className="form-actions">
-          <p><Icon name="info" width="15" height="15" /> Add a description, a diagram, or both.</p>
-          <div className="continue-action"><span>{draft.diagram ? 'Next: review your diagram' : 'Next: plan your workflow'}</span>
-            <Button type="submit">Continue <Icon name="arrow" width="17" height="17" /></Button>
+        <div className="mt-7 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <p className="flex items-center gap-2 text-[10px] text-muted"><Icon name="info" width="15" height="15" /> Add a description, a diagram, or both.</p>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[10px] text-muted md:max-lg:hidden">Next: review the structure</span>
+            <Button type="submit" className="min-w-36 md:min-w-[133px]">Continue <Icon name="arrow" width="17" height="17" /></Button>
           </div>
         </div>
       </form>
-      <footer className="page-footer"><span>DESCRIBE OR UPLOAD</span><span>01 <span className="footer-divider">/</span> 06</span></footer>
+      <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10">
+        <span>DESCRIBE OR UPLOAD</span>
+        <span className="font-semibold tracking-wide text-accent">01 <span className="mx-2 text-slate-400">/</span> 06</span>
+      </footer>
     </>
   )
 }

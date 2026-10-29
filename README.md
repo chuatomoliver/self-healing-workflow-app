@@ -4,9 +4,11 @@ Self-Healing Workflow Builder.
 
 ## Current setup
 
-The `frontend/` directory contains the React + TypeScript application, built with Vite.
-This initial setup includes the default starter screen and development tooling only.
-Backend services and application features will be added separately.
+The `frontend/` directory contains the React + TypeScript application, built with
+Vite and styled with Tailwind CSS.
+The frontend currently includes Describe or Upload and a sample Parse Diagram
+review page. The review graph, nodes, and edges use example data; Muse integration
+and workflow planning will be added separately.
 
 ## Run locally
 
@@ -26,5 +28,6 @@ Run these commands from `frontend/`:
 
 ```powershell
 npm run lint
+npm test
 npm run build
 ```
