@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { workflowRoutes } from '../../../app/navigation'
 import { Button } from '../../../components/ui/Button'
@@ -15,19 +15,13 @@ type ParseDiagramPageProps = {
   sourceFile: File | null
   sourceUrl: string | null
   prompt: string
+  onContinue: () => void
 }
 
-export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt }: ParseDiagramPageProps) {
+export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onContinue }: ParseDiagramPageProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(result.nodes[0]?.id ?? null)
-  const [confirmed, setConfirmed] = useState(false)
-  const noticeRef = useRef<HTMLDivElement>(null)
   const selectedNode = result.nodes.find((node) => node.id === selectedNodeId) ?? result.nodes[0]
   const reviewNodes = result.nodes.filter((node) => node.reviewNote)
-
-  function confirmStructure() {
-    setConfirmed(true)
-    requestAnimationFrame(() => noticeRef.current?.focus())
-  }
 
   return (
     <>
@@ -115,14 +109,6 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt }: Pars
         <ExtractedEdges nodes={result.nodes} edges={result.edges} />
       </div>
 
-      {confirmed && <div ref={noticeRef} tabIndex={-1} role="status"
-        className="mt-5 flex items-start gap-2.5 rounded-lg border border-accent/15 bg-accent-soft p-4 text-xs motion-safe:animate-reveal">
-        <Icon name="check" className="shrink-0 text-accent" />
-        <div><strong className="font-semibold">Sample structure reviewed.</strong>
-          <p className="mt-1.5 leading-relaxed text-muted">Workflow planning is the next step and is not connected yet. This review has not been saved to a server.</p>
-        </div>
-      </div>}
-
       <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
         <Link to={workflowRoutes.describe}
           className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-xs font-semibold transition-colors duration-200 hover:bg-slate-50 motion-reduce:transition-none">
@@ -130,8 +116,8 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt }: Pars
         </Link>
         <div className="flex items-center gap-4">
           <span className="hidden text-[10px] text-muted sm:block">Next: plan your workflow</span>
-          <Button onClick={confirmStructure} disabled={confirmed}>
-            {confirmed ? 'Structure confirmed' : 'Confirm structure'}<Icon name={confirmed ? 'check' : 'arrow'} width="17" height="17" />
+          <Button onClick={onContinue}>
+            Confirm & continue<Icon name="arrow" width="17" height="17" />
           </Button>
         </div>
       </div>
