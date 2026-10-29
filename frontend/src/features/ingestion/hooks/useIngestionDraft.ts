@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { IngestionDraft } from '../types'
 import { prepareIngestionDraft, validateDiagram } from '../validation'
 
 export function useIngestionDraft() {
@@ -7,7 +6,6 @@ export function useIngestionDraft() {
   const [attachment, setAttachment] = useState<{ file: File; previewUrl: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [readyDraft, setReadyDraft] = useState<IngestionDraft | null>(null)
   const diagram = attachment?.file ?? null
 
   useEffect(() => {
@@ -19,12 +17,10 @@ export function useIngestionDraft() {
   function updatePrompt(value: string) {
     setPrompt(value)
     setFormError(null)
-    setReadyDraft(null)
   }
 
   function selectFiles(files: File[]) {
     if (files.length === 0) return
-    setReadyDraft(null)
     if (files.length !== 1) {
       setFileError('Files were not added. Add one diagram at a time.')
       return
@@ -41,15 +37,15 @@ export function useIngestionDraft() {
     setAttachment(null)
     setFileError(null)
     setFormError(null)
-    setReadyDraft(null)
   }
 
   function prepareDraft() {
     const result = prepareIngestionDraft(prompt, diagram)
     setFormError(result.ok ? null : result.error)
-    setReadyDraft(result.ok ? result.draft : null)
-    return result.ok
+    return result.ok ? result.draft : null
   }
 
-  return { prompt, diagram, previewUrl: attachment?.previewUrl ?? null, fileError, formError, readyDraft, updatePrompt, selectFiles, removeDiagram, prepareDraft }
+  return { prompt, diagram, previewUrl: attachment?.previewUrl ?? null, fileError, formError, updatePrompt, selectFiles, removeDiagram, prepareDraft }
 }
+
+export type IngestionFormState = ReturnType<typeof useIngestionDraft>
