@@ -17,6 +17,7 @@ Vite prints the local development URL after starting.
 
 - `npm run dev`: start the development server with hot module replacement.
 - `npm run lint`: check source files with Oxlint.
+- `npm test`: check input validation and next-stage selection using Node's test runner.
 - `npm run build`: check TypeScript and produce a production build in `dist/`.
 - `npm run preview`: serve the production build locally for review.
 
@@ -24,9 +25,20 @@ Vite prints the local development URL after starting.
 
 - `index.html`: browser entry document.
 - `src/main.tsx`: React application entry point.
-- `src/App.tsx`: starter application component.
+- `src/App.tsx`: application composition.
+- `src/layouts/AppLayout.tsx`: workflow sidebar and shared page shell.
+- `src/features/ingestion/`: Describe or Upload page, form behavior, and validation.
 - `src/index.css`: global styles.
-- `src/App.css`: starter component styles.
 
-The default Vite starter screen is retained for this setup commit. Feature folders
-and additional dependencies will be introduced as each feature is implemented.
+## Describe or Upload
+
+Accepts a description, a PNG/JPG/PDF diagram, or both. Descriptions are limited to
+4,000 characters and diagrams to 10 MB. Files stay local; image thumbnails and
+file preview links use temporary object URLs, which are released on replacement,
+removal, or unmounting.
+
+Text-only drafts proceed to planning; drafts with a diagram proceed to parsing.
+Continue currently displays this intent without calling an API. Muse integration
+and later screens will be implemented in separate changes. Nothing is persisted
+across a page reload. Client validation is a usability check; the future backend
+must validate file content, size, and request data independently.
