@@ -95,7 +95,7 @@ export function SelfHealPage({ plan, steps, review, currentFrame, onVerify, onRe
           <Button variant="secondary" onClick={onReject}>Reject & keep editing</Button>
           <div className="flex flex-col items-end gap-2"><Button disabled={!verified || currentFrame !== review.snapshot.frame} onClick={apply} aria-describedby={!verified ? 'repair-verification-required' : undefined}>Apply repair & resume<Icon name="arrow" width="16" height="16" /></Button>{!verified && <p id="repair-verification-required" className="text-[10px] text-muted">Verify the repair first</p>}</div>
         </>}</div>}
-        {applied && <span role="status" className="flex items-center gap-2 text-[11px] font-medium text-emerald-800"><Icon name="check" width="16" height="16" />Repair applied</span>}
+        {applied && <div className="flex flex-wrap items-center gap-4"><span role="status" className="flex items-center gap-2 text-[11px] font-medium text-emerald-800"><Icon name="check" width="16" height="16" />Repair applied</span><Link to={workflowRoutes.logs} className={canvasLinkClasses}>Context & logs<Icon name="arrow" width="15" height="15" /></Link></div>}
       </div>
     </>}
     <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10"><span>SELF-HEAL</span><span className="font-semibold tracking-wide text-accent">05 <span className="mx-2 text-slate-400">/</span> 06</span></footer>
