@@ -33,6 +33,7 @@ Vite prints the local development URL after starting.
 - `src/features/workflows/`: workflow-plan templates and example configuration.
 - `src/features/canvas/`: editable canvas, step inspector, and sample run playback.
 - `src/features/healing/`: failed-run context, repair review, verification, and local replay.
+- `src/features/history/`: session audit records, history filters, execution details, and workflow context.
 - `src/index.css`: Tailwind entry point, shared theme tokens, and minimal base styles.
 
 ## Styling
@@ -187,7 +188,8 @@ the failed delivery. Subsequent fixture runs honor the applied field rename.
 Reject & keep editing preserves the original configuration and returns to the
 canvas. The rejected review can be reopened. Verification, decisions, the current
 run, and plan updates survive navigation for this session; reloading resets them.
-Self-heal is a separately loaded page; Context & logs remains unavailable.
+Self-heal is a separately loaded page. Successful replay stays on the canvas;
+the Context & logs button opens its history.
 
 These are frontend fixtures and local checks, not MUSE output, sandbox execution,
 or live webhook delivery. No API requests, secrets, database writes, automatic
@@ -200,6 +202,36 @@ Development/demo terminology stays in source names, comments, and documentation.
 The interface uses normal workflow labels; those wording changes do not enable
 live connections or execution.
 
+## Context & logs
+
+`/context-and-logs` is the sixth page and is accessible from the sidebar and
+canvas footer. Successful executions and repair replays stay on the canvas until
+the user clicks Context & logs. That button selects the current run's records.
+Failures remain on the canvas for repair review. Stopped and failed runs can also
+be inspected through the sidebar. An empty session shows an empty history state.
+
+`useSessionHistory` observes the run and repair state above the routes. `journal.ts`
+deduplicates repeated effect observations and captures immutable context/output
+snapshots. A replay is a new attempt under the same run ID, preserving the original
+failed attempt and its pre-repair mappings. Repair events retain review opening,
+verification, rejection, reopening, and application even after the active repair
+review is cleared by a new run. Starting a new execution adds history rather than
+replacing earlier records. No database or browser-storage persistence is used;
+reloading clears this session history.
+
+Run history supports search and status filters. Selecting a record exposes its
+step outputs, filterable execution events, repair decision timeline, and original
+input/plan/webhook context. The `run` and `view` URL parameters select an attempt
+and detail panel; a run ID selects its latest attempt. Timestamps display in
+Asia/Manila, and durations reflect local playback timings. Historical input stores
+only diagram metadata, not file contents or object URLs. No credentials are stored.
+
+All six UI stages are available. Planning, canvas, healing, and history use lazy
+page bundles. The history is frontend audit data for the current fixtures, not
+server execution evidence, AI memory, or VectorDB persistence. REST integration
+must replace local observations with authoritative run IDs, server timestamps,
+versioned workflow snapshots, and persistent audit events.
+
 When deploying this SPA, configure the frontend host to serve `index.html` for
-client routes such as `/parse-diagram`, `/plan-workflow`, `/run-on-canvas`, and `/self-heal`. Vite handles this
+client routes such as `/parse-diagram`, `/plan-workflow`, `/run-on-canvas`, `/self-heal`, and `/context-and-logs`. Vite handles this
 during local development.

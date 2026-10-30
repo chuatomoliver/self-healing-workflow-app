@@ -6,7 +6,6 @@ import { workflowRoutes } from './app/navigation'
 import { useIngestionDraft } from './features/ingestion/hooks/useIngestionDraft'
 import { ParseDiagramPage } from './features/diagram-parsing/pages/ParseDiagramPage'
 import { sampleDiagram } from './features/diagram-parsing/data/sampleDiagram'
-import { PlanWorkflowPage } from './features/workflows/pages/PlanWorkflowPage'
 import { samplePlan } from './features/workflows/data/samplePlan'
 import { useWebhookConnections } from './features/workflows/hooks/useWebhookConnections'
 import { useCanvasDraft } from './features/canvas/hooks/useCanvasDraft'
@@ -14,9 +13,12 @@ import { useDemoRun } from './features/canvas/hooks/useDemoRun'
 import type { DemoRunFrame } from './features/canvas/types'
 import type { WorkflowPlan } from './features/workflows/types'
 import { useRepairReview } from './features/healing/hooks/useRepairReview'
+import { useSessionHistory } from './features/history/hooks/useSessionHistory'
 
 const RunCanvasPage = lazy(() => import('./features/canvas/pages/RunCanvasPage').then((module) => ({ default: module.RunCanvasPage })))
 const SelfHealPage = lazy(() => import('./features/healing/pages/SelfHealPage').then((module) => ({ default: module.SelfHealPage })))
+const PlanWorkflowPage = lazy(() => import('./features/workflows/pages/PlanWorkflowPage').then((module) => ({ default: module.PlanWorkflowPage })))
+const ContextLogsPage = lazy(() => import('./features/history/pages/ContextLogsPage').then((module) => ({ default: module.ContextLogsPage })))
 
 const initialCanvasPositions = Object.fromEntries(sampleDiagram.nodes.map((node) => [node.id, node.position]))
 
@@ -30,6 +32,8 @@ function App() {
   const canvasDraft = useCanvasDraft(plan, initialCanvasPositions)
   const run = useDemoRun(plan.steps.map((step) => step.id))
   const healing = useRepairReview(run.frame, run.runId, run.scenarioLabel)
+  const history = useSessionHistory({ frame: run.frame, runId: run.runId, inputLabel: run.scenarioLabel,
+    plan, steps: canvasDraft.steps, prompt: draft.prompt, diagram: draft.diagram, review: healing.review })
 
   useEffect(() => {
     const leftCanvas = previousPath.current === workflowRoutes.canvas && pathname !== workflowRoutes.canvas
@@ -57,15 +61,23 @@ function App() {
             onContinue={() => navigate(workflowRoutes.plan)} />
         } />
         <Route path={workflowRoutes.plan} element={
-          <PlanWorkflowPage plan={plan} prompt={draft.prompt} sourceFile={draft.diagram}
-            webhookConnections={webhooks.connections} onConnectWebhook={webhooks.connect}
-            onContinue={() => navigate(workflowRoutes.canvas)} />
+          <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading plan…</p>}>
+            <PlanWorkflowPage plan={plan} prompt={draft.prompt} sourceFile={draft.diagram}
+              webhookConnections={webhooks.connections} onConnectWebhook={webhooks.connect}
+              onContinue={() => navigate(workflowRoutes.canvas)} />
+          </Suspense>
         } />
         <Route path={workflowRoutes.canvas} element={
           <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading the canvas…</p>}>
             <RunCanvasPage plan={plan} draft={canvasDraft} webhookConnections={webhooks.connections}
               onConnectWebhook={webhooks.connect} run={run} hasRepairReview={healing.review !== null}
-              onReviewRepair={() => navigate(workflowRoutes.heal)} />
+              onReviewRepair={() => navigate(workflowRoutes.heal)}
+              onViewLogs={() => navigate(run.runId ? `${workflowRoutes.logs}?run=${encodeURIComponent(run.runId)}` : workflowRoutes.logs)} />
+          </Suspense>
+        } />
+        <Route path={workflowRoutes.logs} element={
+          <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading history…</p>}>
+            <ContextLogsPage runs={history.runs} repairs={history.repairs} />
           </Suspense>
         } />
         <Route path={workflowRoutes.heal} element={

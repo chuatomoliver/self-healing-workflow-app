@@ -20,6 +20,7 @@ type RunCanvasPageProps = {
   run: ReturnType<typeof useDemoRun>
   hasRepairReview: boolean
   onReviewRepair: () => void
+  onViewLogs: () => void
 }
 
 const runPresentation = {
@@ -29,7 +30,7 @@ const runPresentation = {
   stopped: { label: 'Stopped', colors: 'bg-amber-50 text-amber-800' },
 }
 
-export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook, run, hasRepairReview, onReviewRepair }: RunCanvasPageProps) {
+export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook, run, hasRepairReview, onReviewRepair, onViewLogs }: RunCanvasPageProps) {
   const scenarios = getSampleScenarios(plan)
   const [selectedStepId, setSelectedStepId] = useState(plan.steps[0]?.id ?? '')
   const [scenarioId, setScenarioId] = useState(scenarios[0].id)
@@ -105,7 +106,7 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
 
     <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
       <Link to={workflowRoutes.plan} className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-xs font-semibold transition-colors duration-200 hover:bg-slate-50 motion-reduce:transition-none"><Icon name="back" width="16" height="16" />Back to plan</Link>
-      <div className="flex flex-col items-end gap-2"><Button disabled={!hasRepairReview || run.running} onClick={onReviewRepair} aria-describedby={!hasRepairReview ? 'healing-pending' : undefined}>Continue to self-heal<Icon name="arrow" width="17" height="17" /></Button>{!hasRepairReview && <p id="healing-pending" className="text-[10px] text-muted">No failed steps to review</p>}</div>
+      <div className="flex flex-wrap items-center gap-3"><Button variant={run.frame?.status === 'succeeded' ? 'primary' : 'secondary'} onClick={onViewLogs}>Context & logs<Icon name="arrow" width="15" height="15" /></Button>{hasRepairReview && run.frame?.status !== 'succeeded' && <Button disabled={run.running} onClick={onReviewRepair}>Continue to self-heal<Icon name="arrow" width="17" height="17" /></Button>}</div>
     </div>
     <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10"><span>RUN ON CANVAS</span><span className="font-semibold tracking-wide text-accent">04 <span className="mx-2 text-slate-400">/</span> 06</span></footer>
     <WebhookTemplateDialog template={reviewWebhook} connections={webhookConnections} onConnect={connectWebhook} onClose={() => setReviewWebhook(null)} />

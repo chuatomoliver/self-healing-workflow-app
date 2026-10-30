@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { WorkflowPlan } from '../../workflows/types'
 import type { CanvasPosition, CanvasPositions } from '../types'
 
 export function useCanvasDraft(plan: WorkflowPlan, initialPositions: CanvasPositions) {
   const [positions, setPositions] = useState(initialPositions)
   const [titles, setTitles] = useState<Record<string, string>>({})
-  const steps = plan.steps.map((step) => ({ ...step, title: titles[step.id] ?? step.title }))
+  const steps = useMemo(() => plan.steps.map((step) => ({ ...step, title: titles[step.id] ?? step.title })), [plan.steps, titles])
 
   function moveStep(id: string, position: CanvasPosition) {
     setPositions((current) => ({ ...current, [id]: position }))
