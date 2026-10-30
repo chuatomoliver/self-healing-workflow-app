@@ -10,9 +10,10 @@ type DemoExecutionLogProps = {
   scenarioLabel?: string
   steps: PlanStep[]
   onInspectFailure: (stepId: string) => void
+  onReviewRepair: () => void
 }
 
-export function DemoExecutionLog({ frame, runId, scenarioLabel, steps, onInspectFailure }: DemoExecutionLogProps) {
+export function DemoExecutionLog({ frame, runId, scenarioLabel, steps, onInspectFailure, onReviewRepair }: DemoExecutionLogProps) {
   const logRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
@@ -39,7 +40,7 @@ export function DemoExecutionLog({ frame, runId, scenarioLabel, steps, onInspect
     {frame?.failure && <div className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-4">
       <p className="flex items-center gap-2 text-xs font-semibold text-danger"><Icon name="info" width="15" height="15" />Delivery failure</p>
       <p className="mt-2 text-[11px] leading-relaxed text-danger">{frame.failure.message}</p>
-      <Button variant="text" size="inline" className="mt-3" onClick={() => onInspectFailure(frame.failure!.stepId)}>Inspect failed step<Icon name="arrow" width="12" height="12" /></Button>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><Button variant="text" size="inline" onClick={() => onInspectFailure(frame.failure!.stepId)}>Inspect failed step<Icon name="arrow" width="12" height="12" /></Button><Button size="compact" onClick={onReviewRepair}>Review repair<Icon name="arrow" width="12" height="12" /></Button></div>
     </div>}
   </section>
 }

@@ -1,6 +1,6 @@
-import { sampleDiagram } from '../../diagram-parsing/data/sampleDiagram'
+import { sampleDiagram } from '../../diagram-parsing/data/sampleDiagram.ts'
 import type { PlanStepConfiguration, WorkflowPlan } from '../types'
-import { sampleWebhooks } from './sampleWebhooks'
+import { sampleWebhooks } from './sampleWebhooks.ts'
 
 const stepConfiguration: Record<string, PlanStepConfiguration> = {
   n1: {

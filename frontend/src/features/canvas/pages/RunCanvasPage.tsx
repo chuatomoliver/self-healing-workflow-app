@@ -8,15 +8,18 @@ import type { PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '
 import { CanvasStepInspector } from '../components/CanvasStepInspector'
 import { DemoExecutionLog } from '../components/DemoExecutionLog'
 import { WorkflowCanvas } from '../components/WorkflowCanvas'
-import { sampleScenarios } from '../data/sampleScenarios'
+import { getSampleScenarios } from '../data/sampleScenarios'
 import type { useCanvasDraft } from '../hooks/useCanvasDraft'
-import { useDemoRun } from '../hooks/useDemoRun'
+import type { useDemoRun } from '../hooks/useDemoRun'
 
 type RunCanvasPageProps = {
   plan: WorkflowPlan
   draft: ReturnType<typeof useCanvasDraft>
   webhookConnections: WebhookConnectionState
   onConnectWebhook: (templateId: string) => void
+  run: ReturnType<typeof useDemoRun>
+  hasRepairReview: boolean
+  onReviewRepair: () => void
 }
 
 const runPresentation = {
@@ -26,15 +29,15 @@ const runPresentation = {
   stopped: { label: 'Stopped', colors: 'bg-amber-50 text-amber-800' },
 }
 
-export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook }: RunCanvasPageProps) {
+export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook, run, hasRepairReview, onReviewRepair }: RunCanvasPageProps) {
+  const scenarios = getSampleScenarios(plan)
   const [selectedStepId, setSelectedStepId] = useState(plan.steps[0]?.id ?? '')
-  const [scenarioId, setScenarioId] = useState(sampleScenarios[0].id)
+  const [scenarioId, setScenarioId] = useState(scenarios[0].id)
   const [reviewWebhook, setReviewWebhook] = useState<PlanWebhookTemplate | null>(null)
   const [connectionMessage, setConnectionMessage] = useState('')
   const inspectorRef = useRef<HTMLElement>(null)
-  const run = useDemoRun(plan.steps.map((step) => step.id))
   const selectedStep = draft.steps.find((step) => step.id === selectedStepId) ?? draft.steps[0]
-  const scenario = sampleScenarios.find((item) => item.id === scenarioId) ?? sampleScenarios[0]
+  const scenario = scenarios.find((item) => item.id === scenarioId) ?? scenarios[0]
   const connectedCount = plan.webhooks.filter((webhook) => webhookConnections[webhook.id] === 'connected-demo').length
   const presentation = run.frame ? runPresentation[run.frame.status] : { label: 'Ready', colors: 'bg-slate-100 text-muted' }
 
@@ -66,7 +69,7 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
         <div className="min-w-0 flex-1 basis-56"><label htmlFor="canvas-demo-input" className="text-[10px] font-semibold">Run input</label>
           <select id="canvas-demo-input" value={scenarioId} disabled={run.running} onChange={(event) => setScenarioId(event.target.value)}
             className="mt-2 w-full min-w-0 rounded-md border border-line bg-surface px-3 py-2.5 text-[11px] outline-none focus:border-accent focus:ring-3 focus:ring-accent/10 disabled:opacity-60">
-            {sampleScenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            {scenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -97,12 +100,12 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
           webhook={plan.webhooks.find((item) => item.id === selectedStep.webhookTemplateId)} connections={webhookConnections}
           output={run.frame?.outputs[selectedStep.id]} onRename={draft.renameStep} onReviewWebhook={setReviewWebhook} />}
       </section>
-      <DemoExecutionLog frame={run.frame} runId={run.runId} scenarioLabel={run.scenarioLabel} steps={draft.steps} onInspectFailure={inspectFailure} />
+      <DemoExecutionLog frame={run.frame} runId={run.runId} scenarioLabel={run.scenarioLabel} steps={draft.steps} onInspectFailure={inspectFailure} onReviewRepair={onReviewRepair} />
     </div>
 
     <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
       <Link to={workflowRoutes.plan} className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-xs font-semibold transition-colors duration-200 hover:bg-slate-50 motion-reduce:transition-none"><Icon name="back" width="16" height="16" />Back to plan</Link>
-      <div className="flex flex-col items-end gap-2"><Button disabled aria-describedby="healing-pending">Continue to self-heal<Icon name="arrow" width="17" height="17" /></Button><p id="healing-pending" className="text-[10px] text-muted">Coming soon</p></div>
+      <div className="flex flex-col items-end gap-2"><Button disabled={!hasRepairReview || run.running} onClick={onReviewRepair} aria-describedby={!hasRepairReview ? 'healing-pending' : undefined}>Continue to self-heal<Icon name="arrow" width="17" height="17" /></Button>{!hasRepairReview && <p id="healing-pending" className="text-[10px] text-muted">No failed steps to review</p>}</div>
     </div>
     <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10"><span>RUN ON CANVAS</span><span className="font-semibold tracking-wide text-accent">04 <span className="mx-2 text-slate-400">/</span> 06</span></footer>
     <WebhookTemplateDialog template={reviewWebhook} connections={webhookConnections} onConnect={connectWebhook} onClose={() => setReviewWebhook(null)} />

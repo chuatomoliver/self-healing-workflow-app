@@ -1,4 +1,5 @@
 import type { DemoScenario, DemoStepResult } from '../types'
+import type { WorkflowPlan } from '../../workflows/types'
 
 const intake: DemoStepResult = {
   stepId: 'n1', message: 'Loaded support request payload.',
@@ -42,3 +43,16 @@ export const sampleScenarios: DemoScenario[] = [
     }],
   },
 ]
+
+// Keep fixture playback consistent with a locally applied webhook repair.
+export function getSampleScenarios(plan: WorkflowPlan): DemoScenario[] {
+  const template = plan.webhooks.find((webhook) => webhook.id === 'on-call-alert')?.payloadTemplate
+  if (!template || template.title !== '{{request.subject}}' || Object.hasOwn(template, 'heading')) return sampleScenarios
+  return sampleScenarios.map((scenario) => scenario.id === 'urgent-failure' ? {
+    ...scenario, label: 'Urgent request · repaired delivery',
+    results: scenario.results.map((result) => result.stepId === 'n4' ? {
+      stepId: result.stepId, message: 'Notification delivery accepted · HTTP 202.',
+      output: { statusCode: 202, deliveryId: 'alert-01' },
+    } : result),
+  } : scenario)
+}

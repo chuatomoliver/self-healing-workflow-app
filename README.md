@@ -7,9 +7,11 @@ Metaflow Workflow Builder.
 The `frontend/` directory contains the React + TypeScript application, built with
 Vite and styled with Tailwind CSS.
 The frontend currently includes Describe or Upload, Parse Diagram, Plan Workflow,
-and Run on Canvas. Diagram interpretation and workflow planning use typed example
+Run on Canvas, and Self-heal. Diagram interpretation and workflow planning use typed example
 data. The canvas supports local layout/name edits and sample execution playback;
 Muse integration, live execution, and persistence will be added separately.
+Self-heal supports reviewing a failed webhook delivery, verifying a proposed field
+rename, rejecting it, or applying the local patch and resuming the failed step.
 Plan Workflow includes suggested webhook templates with one-click demo connection
 states. No live webhook registrations or deliveries are performed.
 
