@@ -10,11 +10,10 @@ type ExtractedNodesProps = {
 
 export function ExtractedNodes({ nodes, selectedNodeId, onSelectNode }: ExtractedNodesProps) {
   return <section className="min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="nodes-heading">
-    <div className="mb-1 flex items-center justify-between gap-3">
+    <div className="mb-4 flex items-center justify-between gap-3">
       <h2 id="nodes-heading" className="text-sm font-semibold">Extracted nodes</h2>
       <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] text-muted">{nodes.length} steps</span>
     </div>
-    <p className="mb-5 text-[11px] leading-relaxed text-muted">Select a step to inspect its suggested purpose.</p>
     <div className="grid gap-2">
       {nodes.map((node, index) => <button key={node.id} type="button"
         aria-pressed={node.id === selectedNodeId} onClick={() => onSelectNode(node.id)}

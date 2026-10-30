@@ -9,12 +9,6 @@ import { MAX_PROMPT_LENGTH } from '../validation'
 const inputPanelClasses = 'min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6'
 
 const examplePrompt = 'When a new Shopify order comes in, create a deal in HubSpot and post a summary to the #sales channel in Slack.'
-const upcomingStages = [
-  { number: '01', title: 'Understand', description: 'Muse reads your description and any diagram you add.' },
-  { number: '02', title: 'Plan', description: 'Muse proposes the steps. Review the plan and connect your apps.' },
-  { number: '03', title: 'Run', description: 'Edit your workflow on the canvas and put it to work.' },
-  { number: '04', title: 'Repair', description: 'If a step breaks, Muse proposes a fix for you to review.' },
-]
 
 type DescribeUploadPageProps = {
   draft: IngestionFormState
@@ -42,7 +36,7 @@ export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProp
           Describe a workflow,<br className="hidden xl:block 2xl:hidden" /> or show us one.
         </h1>
         <p className="text-xs leading-[1.8] text-muted md:text-[13px]">
-          Start with an idea. Describe what you want to automate, upload a diagram,<br className="hidden xl:block" /> or use both. We’ll help you connect the dots.
+          Describe what you want to automate or upload a diagram.
         </p>
       </header>
 
@@ -68,7 +62,7 @@ export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProp
             </div>
             <div className="mt-3 flex items-start justify-between gap-2.5 md:max-xl:flex-col md:max-xl:gap-1.5">
               <span id="prompt-tip" className="max-w-44 text-[9px] leading-[1.8] text-muted md:max-xl:max-w-none">Name the apps, the trigger, and the action.</span>
-              <Button variant="text" size="inline" onClick={() => { draft.updatePrompt(examplePrompt); promptRef.current?.focus() }}>Try an example <Icon name="arrow" width="13" height="13" /></Button>
+              <Button variant="text" size="inline" onClick={() => { draft.updatePrompt(examplePrompt); promptRef.current?.focus() }}>Use a template <Icon name="arrow" width="13" height="13" /></Button>
             </div>
           </section>
 
@@ -80,34 +74,15 @@ export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProp
               </div>
               <span className="text-[8px] tracking-[1px] text-muted">OPTIONAL</span>
             </div>
-            <p className="mb-3 text-[11px] leading-relaxed text-muted">Already mapped it out? Show us what you have.</p>
             <DiagramUpload file={draft.diagram} previewUrl={draft.previewUrl} error={draft.fileError}
               onSelect={draft.selectFiles} onRemove={draft.removeDiagram} />
           </section>
         </div>
 
-        <section className="mt-6 rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="next-heading">
-          <div className="mb-4 flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
-            <h2 className="text-xs font-semibold tracking-tight" id="next-heading">From idea to automation</h2>
-            <span className="flex items-center gap-1.5 text-[9px] text-muted"><Icon name="sparkle" width="13" height="13" className="text-accent" /> Built around Muse AI</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 xl:gap-3.5">
-            {upcomingStages.map((stage) => <div className="rounded-md border border-[#eff0f3] bg-[#f9f9fb] p-3 xl:p-3.5" key={stage.number}>
-              <span className="text-[9px] font-semibold text-accent">{stage.number}</span>
-              <h3 className="mt-2 mb-1.5 text-[11px] font-semibold">{stage.title}</h3>
-              <p className="text-[10px] leading-[1.7] text-muted">{stage.description}</p>
-            </div>)}
-          </div>
-        </section>
-
         {draft.formError && <p className="mt-5 flex items-center gap-2 text-xs text-danger motion-safe:animate-reveal" id="form-error" role="alert"><Icon name="info" width="17" height="17" className="shrink-0" />{draft.formError}</p>}
 
-        <div className="mt-7 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <p className="flex items-center gap-2 text-[10px] text-muted"><Icon name="info" width="15" height="15" /> Add a description, a diagram, or both.</p>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[10px] text-muted md:max-lg:hidden">Next: review the structure</span>
-            <Button type="submit" className="min-w-36 md:min-w-[133px]">Continue <Icon name="arrow" width="17" height="17" /></Button>
-          </div>
+        <div className="mt-7 flex justify-end">
+          <Button type="submit" className="min-w-36 md:min-w-[133px]">Continue <Icon name="arrow" width="17" height="17" /></Button>
         </div>
       </form>
       <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10">

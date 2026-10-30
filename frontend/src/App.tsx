@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { AppLayout } from './layouts/AppLayout'
 import { DescribeUploadPage } from './features/ingestion/pages/DescribeUploadPage'
 import { Navigate, Route, Routes, useNavigate } from 'react-router'
@@ -7,10 +8,18 @@ import { ParseDiagramPage } from './features/diagram-parsing/pages/ParseDiagramP
 import { sampleDiagram } from './features/diagram-parsing/data/sampleDiagram'
 import { PlanWorkflowPage } from './features/workflows/pages/PlanWorkflowPage'
 import { samplePlan } from './features/workflows/data/samplePlan'
+import { useWebhookConnections } from './features/workflows/hooks/useWebhookConnections'
+import { useCanvasDraft } from './features/canvas/hooks/useCanvasDraft'
+
+const RunCanvasPage = lazy(() => import('./features/canvas/pages/RunCanvasPage').then((module) => ({ default: module.RunCanvasPage })))
+
+const initialCanvasPositions = Object.fromEntries(sampleDiagram.nodes.map((node) => [node.id, node.position]))
 
 function App() {
   const draft = useIngestionDraft()
   const navigate = useNavigate()
+  const webhooks = useWebhookConnections(samplePlan.webhooks)
+  const canvasDraft = useCanvasDraft(samplePlan, initialCanvasPositions)
 
   return (
     <AppLayout>
@@ -24,7 +33,15 @@ function App() {
             onContinue={() => navigate(workflowRoutes.plan)} />
         } />
         <Route path={workflowRoutes.plan} element={
-          <PlanWorkflowPage plan={samplePlan} prompt={draft.prompt} sourceFile={draft.diagram} />
+          <PlanWorkflowPage plan={samplePlan} prompt={draft.prompt} sourceFile={draft.diagram}
+            webhookConnections={webhooks.connections} onConnectWebhook={webhooks.connect}
+            onContinue={() => navigate(workflowRoutes.canvas)} />
+        } />
+        <Route path={workflowRoutes.canvas} element={
+          <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading the canvas…</p>}>
+            <RunCanvasPage plan={samplePlan} draft={canvasDraft} webhookConnections={webhooks.connections}
+              onConnectWebhook={webhooks.connect} />
+          </Suspense>
         } />
         <Route path="*" element={<Navigate to={workflowRoutes.describe} replace />} />
       </Routes>

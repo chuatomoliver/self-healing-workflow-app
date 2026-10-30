@@ -34,7 +34,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           Review the diagram structure.
         </h1>
         <p className="max-w-2xl text-xs leading-[1.8] text-muted md:text-[13px]">
-          Muse will suggest the steps, their roles, and how they connect. Check the interpretation before turning it into a workflow plan.
+          Review the extracted steps and connections.
         </p>
       </header>
 
@@ -43,7 +43,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><Icon name="file" width="18" height="18" /></span>
             <div className="min-w-0">
-              <p className="text-[9px] tracking-wide text-muted">{sourceFile ? 'SELECTED DIAGRAM' : 'EXAMPLE SCENARIO'}</p>
+              <p className="text-[9px] tracking-wide text-muted">{sourceFile ? 'SELECTED DIAGRAM' : 'WORKFLOW'}</p>
               <p className="mt-1 text-xs font-medium break-all">{sourceFile?.name ?? result.title}</p>
               {sourceFile && <p className="mt-1 text-[10px] text-muted">{formatFileSize(sourceFile.size)} · Kept locally</p>}
             </div>
@@ -69,7 +69,6 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 id="structure-heading" className="text-sm font-semibold">Suggested structure</h2>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-800">Sample result</span>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">{result.title} · {result.nodes.length} nodes · {result.edges.length} edges</p>
           </div>
@@ -79,16 +78,10 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           </button>}
         </div>
 
-        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-accent/10 bg-accent-soft/60 px-3.5 py-3 text-[11px] leading-relaxed text-muted">
-          <Icon name="sparkle" width="15" height="15" className="mt-0.5 shrink-0 text-accent" />
-          <p>This is an example interpretation, not a reading of your file. Muse will provide the actual nodes and connections once integrated.</p>
-        </div>
-
         <DiagramGraph result={result} selectedNodeId={selectedNode?.id ?? null} onSelectNode={setSelectedNodeId} />
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
-          <span>Select a node to inspect it. Drag the background to pan.</span>
-          <span className="flex items-center gap-1.5"><Icon name="branch" width="13" height="13" />Arrows indicate direction</span>
+          <span>Select a node to inspect · Drag to pan</span>
         </div>
 
         {selectedNode && <section className="mt-5 rounded-lg border border-line bg-slate-50/70 p-4" aria-label="Selected node details" aria-live="polite">
@@ -115,7 +108,6 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           <Icon name="back" width="16" height="16" />Back
         </Link>
         <div className="flex items-center gap-4">
-          <span className="hidden text-[10px] text-muted sm:block">Next: plan your workflow</span>
           <Button onClick={onContinue}>
             Confirm & continue<Icon name="arrow" width="17" height="17" />
           </Button>

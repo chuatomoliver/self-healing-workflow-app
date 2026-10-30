@@ -2,17 +2,19 @@ import type { RefObject } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Icon } from '../../../components/ui/Icon'
 import { NodeRoleBadge } from '../../diagram-parsing/components/NodeRoleBadge'
-import type { PlanConnection, PlanStep, WorkflowPlan } from '../types'
+import type { PlanStep, PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../types'
+import { WebhookStatus } from './WebhookStatus'
 
 type PlanStepDetailsProps = {
   step: PlanStep
   plan: WorkflowPlan
   containerRef: RefObject<HTMLElement | null>
-  onReviewConnection: (connection: PlanConnection) => void
+  webhookConnections: WebhookConnectionState
+  onReviewWebhook: (template: PlanWebhookTemplate) => void
 }
 
-export function PlanStepDetails({ step, plan, containerRef, onReviewConnection }: PlanStepDetailsProps) {
-  const connection = plan.connections.find((item) => item.id === step.connectionId)
+export function PlanStepDetails({ step, plan, containerRef, webhookConnections, onReviewWebhook }: PlanStepDetailsProps) {
+  const webhook = plan.webhooks.find((item) => item.id === step.webhookTemplateId)
   const outgoingEdges = plan.edges.filter((edge) => edge.source === step.id)
 
   return <section id="plan-step-details" ref={containerRef} tabIndex={-1} className="min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="step-details-heading">
@@ -26,9 +28,9 @@ export function PlanStepDetails({ step, plan, containerRef, onReviewConnection }
     <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-slate-50/70 p-3.5">
       <div><p className="text-[9px] tracking-wide text-muted">PROPOSED OPERATION</p>
         <p className="mt-1 text-xs font-medium">{step.operation}</p>
-        <p className="mt-1 text-[10px] text-muted">{connection?.provider ?? 'Workflow logic'}</p>
+        <p className="mt-1 text-[10px] text-muted">{webhook ? `${webhook.name} · ${webhook.direction} webhook` : 'Workflow logic'}</p>
       </div>
-      {connection && <Button variant="text" size="inline" onClick={() => onReviewConnection(connection)}>Review connection<Icon name="arrow" width="12" height="12" /></Button>}
+      {webhook && <div className="flex flex-wrap items-center gap-3"><WebhookStatus state={webhookConnections[webhook.id]} /><Button variant="text" size="inline" onClick={() => onReviewWebhook(webhook)}>View webhook<Icon name="arrow" width="12" height="12" /></Button></div>}
     </div>
 
     <div className="mt-5">

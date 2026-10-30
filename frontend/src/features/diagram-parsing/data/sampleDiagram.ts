@@ -1,7 +1,7 @@
 import type { ParsedDiagram } from '../types'
 
 export const sampleDiagram: ParsedDiagram = {
-  id: 'sample-support-triage',
+  id: 'support-triage',
   title: 'Support request triage',
   summary: 'Read an incoming support request and route it based on urgency.',
   nodes: [
