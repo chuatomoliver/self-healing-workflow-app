@@ -32,6 +32,7 @@ Vite prints the local development URL after starting.
 - `src/features/diagram-parsing/`: diagram review templates and example data.
 - `src/features/workflows/`: workflow-plan templates and example configuration.
 - `src/features/canvas/`: editable canvas, step inspector, and sample run playback.
+- `src/features/healing/`: failed-run context, repair review, verification, and local replay.
 - `src/index.css`: Tailwind entry point, shared theme tokens, and minimal base styles.
 
 ## Styling
@@ -153,21 +154,52 @@ urgency rule. Demo playback works before webhook setup because no external
 services are contacted. HTTP codes are illustrative fixtures.
 
 `demoPlayback.ts` creates immutable playback frames and stops at a failure.
-`useDemoRun` schedules the frames, supports Stop, and clears its timer on unmount.
-Leaving the canvas ends that playback; a new visit has an empty log. Starting a
-new demo replaces the previous log/output. Layout/name changes are disabled
-during playback. Failed-step inspection exposes sample error context for the
-future MUSE repair page; it does not trigger an AI request or apply a patch.
+`useDemoRun` schedules the frames and supports Stop. Run state now lives above
+the routes so its terminal result remains available for repair review. Leaving
+the canvas during playback stops that run. Starting a new run replaces the log
+and invalidates the previous repair review. Layout/name changes are disabled
+during playback. A failed run enables Review repair / Continue to self-heal.
 
 The future REST integration should supply validated canvas data and actual
 execution events instead of fixtures. Demo statuses are not proof of connected
-live endpoints, successful delivery, or a runnable workflow. Self-heal remains
-unavailable until its UI is implemented.
+live endpoints, successful delivery, or a runnable workflow.
+
+## Self-heal
+
+`/self-heal` is available through the sidebar and failed canvas runs. Without a
+failed run it shows an empty state. To inspect the full frontend flow, select
+Urgent request · delivery failure on the canvas, run it, then select Review repair.
+
+The current repair is bounded to the fixture's on-call webhook HTTP 400 error:
+the receiver expects `title` rather than `heading`. `repair.ts` builds the original
+payload from the failed run's upstream values and the webhook template. The page
+shows the error response/events, before/after payloads, receiver contract, and
+mapping change. It offers no invented proposal for unsupported failures.
+
+Verify repair checks required string fields, the renamed value, preservation of
+other fields, and template/mapping consistency. Apply repair & resume remains
+disabled until these checks pass. Applying also rejects stale plan mappings or a
+different current run. The local plan updates only the affected step mapping and
+webhook payload template, leaving other steps and connection states intact.
+Replay preserves the earlier successful steps and skipped branch, then plays only
+the failed delivery. Subsequent fixture runs honor the applied field rename.
+
+Reject & keep editing preserves the original configuration and returns to the
+canvas. The rejected review can be reopened. Verification, decisions, the current
+run, and plan updates survive navigation for this session; reloading resets them.
+Self-heal is a separately loaded page; Context & logs remains unavailable.
+
+These are frontend fixtures and local checks, not MUSE output, sandbox execution,
+or live webhook delivery. No API requests, secrets, database writes, automatic
+repair policies, or deployments are implemented. For REST integration, replace
+the proposal/contract fixtures with validated responses and versioned server-side
+verification, patch, and replay results. Keep this implementation context out of
+the product's visible UI wording.
 
 Development/demo terminology stays in source names, comments, and documentation.
 The interface uses normal workflow labels; those wording changes do not enable
 live connections or execution.
 
 When deploying this SPA, configure the frontend host to serve `index.html` for
-client routes such as `/parse-diagram`, `/plan-workflow`, and `/run-on-canvas`. Vite handles this
+client routes such as `/parse-diagram`, `/plan-workflow`, `/run-on-canvas`, and `/self-heal`. Vite handles this
 during local development.

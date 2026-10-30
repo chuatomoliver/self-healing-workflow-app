@@ -3,6 +3,7 @@ export const workflowRoutes = {
   parse: '/parse-diagram',
   plan: '/plan-workflow',
   canvas: '/run-on-canvas',
+  heal: '/self-heal',
 } as const
 
 export const workflowStages = [
@@ -10,6 +11,6 @@ export const workflowStages = [
   { label: 'Parse diagram', path: workflowRoutes.parse },
   { label: 'Plan workflow', path: workflowRoutes.plan },
   { label: 'Run on canvas', path: workflowRoutes.canvas },
-  { label: 'Self-heal', path: null },
+  { label: 'Self-heal', path: workflowRoutes.heal },
   { label: 'Context & logs', path: null },
 ] as const

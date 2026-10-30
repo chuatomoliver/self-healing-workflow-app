@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createDemoFrames, stopDemoFrame } from '../demoPlayback'
 import type { DemoRunFrame, DemoScenario } from '../types'
 
@@ -25,12 +25,18 @@ export function useDemoRun(stepIds: string[]) {
     setPlayback({ frames, index: 0, runNumber: runCount.current, scenarioLabel: scenario.label })
   }
 
-  function stop() {
-    setPlayback((current) => current ? {
+  const stop = useCallback(() => {
+    setPlayback((current) => current?.frames[current.index].status === 'running' ? {
       ...current, frames: [stopDemoFrame(current.frames[current.index])], index: 0,
     } : current)
+  }, [])
+
+  function resume(frames: DemoRunFrame[]) {
+    if (frames.length === 0) return
+    setPlayback((current) => current?.frames[current.index].status === 'failed'
+      ? { ...current, frames, index: 0, scenarioLabel: 'Resumed execution' } : current)
   }
 
-  return { frame, running, start, stop, scenarioLabel: playback?.scenarioLabel,
+  return { frame, running, start, stop, resume, scenarioLabel: playback?.scenarioLabel,
     runId: playback ? `run-${String(playback.runNumber).padStart(3, '0')}` : null }
 }
