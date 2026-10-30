@@ -10,11 +10,10 @@ type PlanStepListProps = {
 
 export function PlanStepList({ steps, selectedStepId, onSelectStep }: PlanStepListProps) {
   return <section className="min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="steps-heading">
-    <div className="mb-1 flex items-center justify-between gap-3">
+    <div className="mb-4 flex items-center justify-between gap-3">
       <h2 id="steps-heading" className="text-sm font-semibold">Proposed steps</h2>
       <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] text-muted">{steps.length} steps</span>
     </div>
-    <p className="mb-5 text-[11px] leading-relaxed text-muted">Inspect what each step will do and what it needs.</p>
     <ol className="grid gap-2.5">
       {steps.map((step, index) => <li key={step.id}>
         <button type="button" aria-pressed={step.id === selectedStepId} aria-controls="plan-step-details" onClick={() => onSelectStep(step.id)}

@@ -12,7 +12,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stage = workflowStages.find((item) => item.path === pathname)
-    document.title = `${stage?.label ?? 'Workflow Builder'} | Self-Healing Workflow Builder`
+    document.title = `${stage?.label ?? 'Workflow Builder'} | Metaflow`
     mainRef.current?.focus({ preventScroll: true })
     window.scrollTo(0, 0)
   }, [pathname])
@@ -24,7 +24,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-3 md:px-2">
           <span className="grid h-9 w-8 place-items-center rounded-[10px] bg-accent text-white md:h-10.5 md:w-9.5"><Icon name="workflow" width="25" height="25" /></span>
           <div>
-            <span className="block text-base font-bold tracking-[-0.5px] md:text-[17px]">Self-Healing</span>
+            <span className="block text-base font-bold tracking-[-0.5px] md:text-[17px]">Metaflow</span>
             <span className="mt-px block text-xs text-muted">Workflow Builder</span>
           </div>
         </div>

@@ -6,7 +6,7 @@ export type PlanSetting = { label: string; value: string; needsInput?: boolean }
 
 export type PlanStepConfiguration = {
   operation: string
-  connectionId?: string
+  webhookTemplateId?: string
   inputs: PlanField[]
   outputs: PlanField[]
   configuration: PlanSetting[]
@@ -20,12 +20,26 @@ export type PlanStep = PlanStepConfiguration & {
   description: string
 }
 
-export type PlanConnection = {
+// Suggested contracts only. URLs are placeholders; credentials belong on the server.
+export type PlanWebhookTemplate = {
   id: string
-  provider: string
+  name: string
+  direction: 'incoming' | 'outgoing'
+  method: 'POST'
+  event: string
   purpose: string
-  permissions: string[]
+  suggestionReason: string
+  endpoint: { kind: 'managed' | 'external'; urlTemplate: string }
+  authentication: {
+    type: 'signature' | 'secret-header'
+    headerName: string
+    secretRef: string
+  }
+  payloadTemplate: Record<string, string>
 }
+
+// Local UI state is separate from the suggested plan, never proof of a live connection.
+export type WebhookConnectionState = Record<string, 'connected-demo' | undefined>
 
 export type PlanQuestion = {
   id: string
@@ -38,7 +52,7 @@ export type PlanCheck = {
   id: string
   title: string
   description: string
-  status: 'sample' | 'pending' | 'needs-input' | 'not-run'
+  status: 'pending' | 'needs-input' | 'not-run'
 }
 
 // Frontend sample/view model; this is not an executable engine definition.
@@ -50,7 +64,7 @@ export type WorkflowPlan = {
   expectedOutcome: string
   steps: PlanStep[]
   edges: DiagramEdge[]
-  connections: PlanConnection[]
+  webhooks: PlanWebhookTemplate[]
   questions: PlanQuestion[]
   checks: PlanCheck[]
 }

@@ -20,7 +20,7 @@ export function Dialog({ open, title, onClose, children }: DialogProps) {
 
   return <dialog ref={dialogRef} aria-label={title}
     onCancel={(event) => { event.preventDefault(); onClose() }}
-    className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-line bg-surface p-0 text-ink shadow-xl backdrop:bg-slate-950/30 backdrop:backdrop-blur-xs open:motion-safe:animate-reveal">
+    className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-xl border border-line bg-surface p-0 text-ink shadow-xl backdrop:bg-slate-950/30 backdrop:backdrop-blur-xs open:motion-safe:animate-reveal">
     <div className="flex items-center justify-between gap-4 border-b border-line px-6 py-4">
       <h2 className="text-sm font-semibold">{title}</h2>
       <button type="button" onClick={onClose} aria-label="Close dialog"
