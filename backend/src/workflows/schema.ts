@@ -18,7 +18,7 @@ const webhookProperties = {
   }),
   payloadTemplate: { type: 'object', maxProperties: 100, propertyNames: id, additionalProperties: text() },
 }
-const webhook = object({ ...webhookProperties, suggestedBy: choice('muse') }, Object.keys(webhookProperties))
+const webhook = object({ ...webhookProperties, suggestedBy: choice('muse'), setup: object({ endpointReviewed: { type: 'boolean' }, authenticationReviewed: { type: 'boolean' }, payloadReviewed: { type: 'boolean' } }) }, Object.keys(webhookProperties))
 export const draftSchema = object({
   prompt: text(4000),
   diagram: object({
@@ -30,18 +30,21 @@ export const draftSchema = object({
     edges: list(edge),
   }),
   plan: object({
+    generatedBy: choice('muse'), structureReviewed: { type: 'boolean' },
     id, sourceDiagramId: id, title: { ...text(200, 1), pattern: '\\S' }, summary: text(), expectedOutcome: text(),
     steps: list(object({
-      id, title: { ...text(200, 1), pattern: '\\S' }, role, description: text(), operation: text(200, 1), webhookTemplateId: id,
+      id, title: { ...text(200, 1), pattern: '\\S' }, role, description: text(), operation: text(200, 1), webhookTemplateId: id, reviewed: { type: 'boolean' },
       inputs: list(field, 100), outputs: list(field, 100),
       configuration: list(object({ label: text(200, 1), value: text(), needsInput: { type: 'boolean' } }, ['label', 'value']), 100),
       mappings: list(object({ source: text(200, 1), target: text(200, 1) }), 100),
     }, ['id', 'title', 'role', 'description', 'operation', 'inputs', 'outputs', 'configuration', 'mappings']), 100, 1),
     edges: list(edge), webhooks: list(webhook, 100),
-    questions: list(object({ id, stepId: id, question: text(), explanation: text() })),
-    checks: list(object({ id, title: text(200, 1), description: text(), status: choice('pending', 'needs-input', 'not-run') })),
-  }),
+    questions: list(object({ id, stepId: id, question: text(), explanation: text(), answer: text() }, ['id', 'stepId', 'question', 'explanation'])),
+    checks: list(object({ id, title: text(200, 1), description: text(), status: choice('pending', 'needs-input', 'not-run', 'reviewed') })),
+  }, ['id', 'sourceDiagramId', 'title', 'summary', 'expectedOutcome', 'steps', 'edges', 'webhooks', 'questions', 'checks']),
 })
+export const diagramSchema = (draftSchema.properties as Record<string, Schema>).diagram
+export const planSchema = (draftSchema.properties as Record<string, Schema>).plan
 export const workflowParamsSchema = object({ id: { type: 'string', format: 'uuid' } })
 export const updateSchema = object({ expectedVersion: { type: 'integer', minimum: 1, maximum: 2147483646 }, draft: draftSchema })
 export const listQuerySchema = object({})

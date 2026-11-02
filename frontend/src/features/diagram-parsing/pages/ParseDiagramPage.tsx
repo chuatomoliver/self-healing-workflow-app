@@ -16,10 +16,9 @@ type ParseDiagramPageProps = {
   sourceUrl: string | null
   prompt: string
   onContinue: () => void
-  isSample: boolean
 }
 
-export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onContinue, isSample }: ParseDiagramPageProps) {
+export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onContinue }: ParseDiagramPageProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(result.nodes[0]?.id ?? null)
   const selectedNode = result.nodes.find((node) => node.id === selectedNodeId) ?? result.nodes[0]
   const reviewNodes = result.nodes.filter((node) => node.reviewNote)
@@ -35,7 +34,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           Review the diagram structure.
         </h1>
         <p className="max-w-2xl text-xs leading-[1.8] text-muted md:text-[13px]">
-          {isSample ? 'This is a sample workflow. Submit a description or diagram to parse your own.' : result.id.startsWith('parsed-') ? 'Review the steps and connections extracted by Muse. Check any points marked for review.' : 'Review the saved steps and connections. Check any points marked for review.'}
+          {result.id.startsWith('parsed-') ? 'Review the steps and connections extracted by Muse. Check any points marked for review.' : 'Review the saved steps and connections. Check any points marked for review.'}
         </p>
       </header>
 
@@ -70,7 +69,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 id="structure-heading" className="text-sm font-semibold">Suggested structure</h2>
-              <span className="rounded-md bg-accent-soft px-2 py-1 text-[10px] text-accent">{isSample ? 'Sample workflow' : result.id.startsWith('parsed-') ? 'Muse Spark 1.3' : 'Saved workflow'}</span>
+              <span className="rounded-md bg-accent-soft px-2 py-1 text-[10px] text-accent">{result.id.startsWith('parsed-') ? 'Muse Spark 1.3' : 'Saved workflow'}</span>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">{result.title} · {result.nodes.length} nodes · {result.edges.length} edges</p>
             <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted">{result.summary}</p>

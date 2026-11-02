@@ -1,5 +1,6 @@
 import type { DiagramEdge, WorkflowDraft } from '../../../shared/workflows.ts'
 import { ApiError } from '../errors.ts'
+import { stepSetupIssues, webhookAuthenticationIssue, webhookEndpointIssue, webhookMappingsIssue, webhookPayloadIssue } from '../../../shared/setup.ts'
 
 function invalid(message: string): never { throw new ApiError(400, 'INVALID_WORKFLOW', message) }
 function unique(items: { id: string }[], label: string) {
@@ -44,6 +45,8 @@ export function validateDraft(draft: WorkflowDraft) {
     if (step.webhookTemplateId && !webhooks.has(step.webhookTemplateId)) invalid('Plan steps must reference existing webhook templates.')
     const webhook = plan.webhooks.find((item) => item.id === step.webhookTemplateId)
     if (webhook && step.role !== (webhook.direction === 'incoming' ? 'trigger' : 'action')) invalid('Incoming webhooks require trigger steps and outgoing webhooks require action steps.')
+    if (step.reviewed && stepSetupIssues(step).length) invalid('Resolve missing step configuration before marking it reviewed.')
+    if (webhook?.setup?.payloadReviewed && webhookMappingsIssue(step, webhook)) invalid('The step mappings must match the reviewed webhook payload.')
   }
   for (const question of plan.questions) if (!steps.has(question.stepId)) invalid('Questions must reference existing steps.')
   validateEdges(diagram.edges, nodes, 'Diagram')
@@ -60,9 +63,8 @@ export function validateDraft(draft: WorkflowDraft) {
     if (webhook.suggestedBy === 'muse') {
       if (plan.steps.filter((step) => step.webhookTemplateId === webhook.id).length !== 1) invalid('Each Muse webhook suggestion must reference exactly one step.')
       const incoming = webhook.direction === 'incoming'
-      if (webhook.endpoint.kind !== (incoming ? 'managed' : 'external')
-        || url.hostname !== (incoming ? 'api.example.invalid' : 'hooks.example.invalid')) {
-        invalid('Unconfigured Muse webhook suggestions must retain their placeholder endpoints.')
+      if (webhook.endpoint.kind !== (incoming ? 'managed' : 'external')) {
+        invalid('Webhook endpoint kinds must match their direction.')
       }
       const fields = Object.keys(webhook.payloadTemplate)
       if (fields.length < 1 || fields.length > 20 || !fields.every((field) => /^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(field))
@@ -70,5 +72,8 @@ export function validateDraft(draft: WorkflowDraft) {
         invalid('Muse webhook payload suggestions must contain field references only.')
       }
     }
+    if (webhook.setup?.endpointReviewed && webhookEndpointIssue(webhook)) invalid('Resolve the webhook endpoint before marking it reviewed.')
+    if (webhook.setup?.authenticationReviewed && webhookAuthenticationIssue(webhook)) invalid('Resolve the authentication reference before marking it reviewed.')
+    if (webhook.setup?.payloadReviewed && webhookPayloadIssue(webhook)) invalid('Resolve the payload fields before marking them reviewed.')
   }
 }

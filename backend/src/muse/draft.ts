@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { WorkflowExtraction } from '../../../shared/parsing.ts'
 import type { PlanWebhookTemplate, WorkflowDraft } from '../../../shared/workflows.ts'
 import { ApiError } from '../errors.ts'
+import { refreshPlanChecks } from '../../../shared/setup.ts'
 
 export function draftFromExtraction(extraction: WorkflowExtraction, prompt: string): WorkflowDraft {
   const linkedSteps = new Set<string>()
@@ -53,11 +54,11 @@ export function draftFromExtraction(extraction: WorkflowExtraction, prompt: stri
       return { ...node, position: { x: level * 300, y: row * 180 } }
     }), edges: extraction.edges,
   }
-  return {
+  const draft: WorkflowDraft = {
     prompt: prompt.trim(), diagram,
     plan: {
       id: `plan-${randomUUID()}`, sourceDiagramId: id, title: diagram.title, summary: diagram.summary,
-      expectedOutcome: 'Review the extracted steps and configure their operations before execution.',
+      expectedOutcome: extraction.summary,
       steps: diagram.nodes.map((node) => {
         const suggestion = extraction.webhooks.find((item) => item.stepId === node.id)
         const fields = suggestion?.payloadFields.map((field) => ({ name: field.name, description: field.description })) ?? []
@@ -87,4 +88,5 @@ export function draftFromExtraction(extraction: WorkflowExtraction, prompt: stri
       ],
     },
   }
+  return { ...draft, plan: refreshPlanChecks(draft.plan) }
 }

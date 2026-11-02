@@ -22,6 +22,20 @@ test('parsing submits the actual description and image bytes without a browser A
   assert.equal(calls, 1)
 })
 
+test('provider failure and exhausted output have different messages without automatic retry', async (t) => {
+  for (const [code, message] of [
+    ['MUSE_OUTPUT_LIMIT', /output limit/], ['MUSE_INCOMPLETE', /did not finish/], ['MUSE_UNAVAILABLE', /server error/],
+  ] as const) {
+    let calls = 0
+    t.mock.method(globalThis, 'fetch', async () => {
+      calls++
+      return Response.json({ error: { code, message: 'do-not-display' } }, { status: 502 })
+    })
+    await assert.rejects(parseWorkflow('Orders', null, new AbortController().signal), (error: unknown) => error instanceof Error && message.test(error.message) && !error.message.includes('do-not-display'))
+    assert.equal(calls, 1)
+  }
+})
+
 test('text-only input is supported and rejected input or cancelled submissions never make a request', async (t) => {
   let calls = 0
   t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {

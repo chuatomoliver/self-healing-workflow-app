@@ -1,0 +1,201 @@
+import type {
+  PlanStep,
+  PlanWebhookTemplate,
+  WorkflowPlan,
+} from "./workflows.ts";
+
+export const fieldReferencePattern =
+  /^\{\{[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*){1,8}\}\}$/;
+export function webhookEndpointIssue(
+  template: PlanWebhookTemplate,
+): string | null {
+  try {
+    const url = new URL(template.endpoint.urlTemplate.trim());
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return "Use an HTTPS address without embedded credentials, query parameters, or fragments.";
+    if (
+      url.hostname.endsWith(".invalid") ||
+      /[{}]/.test(template.endpoint.urlTemplate)
+    )
+      return "Replace the placeholder endpoint with the address you intend to use.";
+  } catch {
+    return "Enter a valid HTTPS endpoint address.";
+  }
+  return null;
+}
+export function webhookAuthenticationIssue(
+  template: PlanWebhookTemplate,
+): string | null {
+  if (!/^[A-Za-z0-9-]{1,100}$/.test(template.authentication.headerName))
+    return "Enter a valid authentication header name.";
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/.test(
+      template.authentication.secretRef,
+    )
+  )
+    return "Enter a credential reference name, not the secret value.";
+  return null;
+}
+export function webhookPayloadIssue(
+  template: PlanWebhookTemplate,
+): string | null {
+  const entries = Object.entries(template.payloadTemplate);
+  if (!entries.length || entries.length > 20)
+    return "Add between 1 and 20 payload fields.";
+  if (
+    entries.some(
+      ([key, value]) =>
+        !/^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(key) ||
+        value.length > 204 ||
+        !fieldReferencePattern.test(value),
+    )
+  )
+    return "Use simple field names and references such as {{order.id}} for payload values.";
+  return null;
+}
+export function webhookSetupIssues(template: PlanWebhookTemplate): string[] {
+  return [
+    webhookEndpointIssue(template),
+    webhookAuthenticationIssue(template),
+    webhookPayloadIssue(template),
+    !template.setup?.endpointReviewed ? "Review the endpoint." : null,
+    !template.setup?.authenticationReviewed
+      ? "Review the authentication reference."
+      : null,
+    !template.setup?.payloadReviewed ? "Review the payload mappings." : null,
+  ].filter((issue): issue is string => !!issue);
+}
+export function webhookMappingsIssue(
+  step: PlanStep,
+  template: PlanWebhookTemplate,
+): string | null {
+  for (const [name, reference] of Object.entries(template.payloadTemplate)) {
+    if (!fieldReferencePattern.test(reference))
+      return "Review the webhook payload references.";
+    const source =
+      template.direction === "incoming"
+        ? `webhook.payload.${name}`
+        : reference.slice(2, -2);
+    const target =
+      template.direction === "incoming"
+        ? reference.slice(2, -2)
+        : `webhook.payload.${name}`;
+    if (
+      !step.mappings.some(
+        (mapping) => mapping.source === source && mapping.target === target,
+      )
+    )
+      return "The linked step mappings do not match the reviewed webhook payload.";
+  }
+  return null;
+}
+export function stepSetupIssues(step: PlanStep): string[] {
+  const issues: string[] = [];
+  if (!step.title.trim()) issues.push("Enter a step name.");
+  if (!step.operation.trim()) issues.push("Describe the operation.");
+  if (
+    step.configuration.some(
+      (setting) =>
+        !setting.label.trim() || !setting.value.trim() || setting.needsInput,
+    )
+  )
+    issues.push(
+      "Complete the configuration settings and clear Needs input when resolved.",
+    );
+  if (step.role === "decision" && !step.configuration.length)
+    issues.push("Add the condition used by this decision.");
+  for (const fields of [step.inputs, step.outputs]) {
+    if (
+      fields.some((field) => !field.name.trim()) ||
+      new Set(fields.map((field) => field.name.trim())).size !== fields.length
+    )
+      issues.push(
+        "Input and output field names must be present and unique within each list.",
+      );
+  }
+  if (
+    step.mappings.some(
+      (mapping) => !mapping.source.trim() || !mapping.target.trim(),
+    )
+  )
+    issues.push("Complete both sides of every field mapping.");
+  return issues;
+}
+export function workflowSetupSummary(plan: WorkflowPlan) {
+  const reviewedSteps = plan.steps.filter(
+    (step) => step.reviewed && !stepSetupIssues(step).length,
+  ).length;
+  const configuredWebhooks = plan.webhooks.filter((webhook) => {
+    const step = plan.steps.find(
+      (item) => item.webhookTemplateId === webhook.id,
+    );
+    return (
+      !!step &&
+      !webhookSetupIssues(webhook).length &&
+      !webhookMappingsIssue(step, webhook)
+    );
+  }).length;
+  const answeredQuestions = plan.questions.filter((question) =>
+    question.answer?.trim(),
+  ).length;
+  const complete =
+    !!plan.steps.length &&
+    !!plan.structureReviewed &&
+    reviewedSteps === plan.steps.length &&
+    configuredWebhooks === plan.webhooks.length &&
+    answeredQuestions === plan.questions.length;
+  return { reviewedSteps, configuredWebhooks, answeredQuestions, complete };
+}
+export function refreshPlanChecks(plan: WorkflowPlan): WorkflowPlan {
+  const summary = workflowSetupSummary(plan);
+  return {
+    ...plan,
+    checks: [
+      {
+        id: "structure",
+        title: "Workflow structure",
+        description: `${plan.steps.length} steps and ${plan.edges.length} connections.`,
+        status: plan.structureReviewed ? "reviewed" : "pending",
+      },
+      {
+        id: "configuration",
+        title: "Step setup",
+        description: `${summary.reviewedSteps} of ${plan.steps.length} steps reviewed.`,
+        status:
+          summary.reviewedSteps === plan.steps.length
+            ? "reviewed"
+            : "needs-input",
+      },
+      {
+        id: "webhooks",
+        title: "Webhook setup",
+        description: `${summary.configuredWebhooks} of ${plan.webhooks.length} webhook configurations reviewed. Connections have not been tested.`,
+        status:
+          summary.configuredWebhooks === plan.webhooks.length
+            ? "reviewed"
+            : "needs-input",
+      },
+      {
+        id: "questions",
+        title: "Open questions",
+        description: `${summary.answeredQuestions} of ${plan.questions.length} questions answered.`,
+        status:
+          summary.answeredQuestions === plan.questions.length
+            ? "reviewed"
+            : "needs-input",
+      },
+      {
+        id: "execution",
+        title: "Live execution",
+        description: "No execution service is connected yet.",
+        status: "not-run",
+      },
+    ],
+  };
+}

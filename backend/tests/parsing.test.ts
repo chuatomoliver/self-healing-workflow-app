@@ -103,7 +103,7 @@ test('Muse webhook suggestions link to matching steps and stay inert, reviewable
   assert.ok(outgoing.suggestionReason.includes('receiver'))
   assert.equal((await app.inject({ method: 'POST', url: '/api/workflows', payload: draft })).statusCode, 201)
   for (const change of [
-    (value: typeof draft) => { value.plan.webhooks[0].endpoint.urlTemplate = 'https://real-receiver.example.test/hook' },
+    (value: typeof draft) => { value.plan.webhooks[0].endpoint.urlTemplate = 'http://real-receiver.example.test/hook' },
     (value: typeof draft) => { value.plan.webhooks[0].payloadTemplate.order_id = 'secret-value' },
     (value: typeof draft) => { value.plan.webhooks[0].payloadTemplate = {} },
     (value: typeof draft) => { delete value.plan.steps[0].webhookTemplateId },
@@ -192,6 +192,9 @@ test('Muse transport uses saved server key, strict structured output, and inline
       assert.ok(body.instructions.includes('An ordinary native API/OAuth action is not automatically a webhook'))
       assert.equal(body.store, false)
       assert.equal(body.max_output_tokens, 8192)
+      assert.deepEqual(body.reasoning, { effort: 'minimal' })
+      assert.equal(body.text.format.schema.properties.title.pattern, undefined)
+      assert.equal(body.text.format.schema.properties.nodes.maxItems, undefined)
       assert.ok(!String(options?.body).includes('server-test-key'))
       const parts = body.input[0].content
       if (attachment) {
@@ -201,6 +204,47 @@ test('Muse transport uses saved server key, strict structured output, and inline
       return Response.json(envelope())
     } })
     assert.deepEqual(await parse({ prompt: 'Orders', ...(attachment ? { attachment } : {}) }, new AbortController().signal), extraction)
+    assert.equal(calls, 1)
+  }
+})
+
+test('simplified Muse decoding still rejects invalid patterns and bounds before returning a draft', async (t) => {
+  for (const bad of [
+    { ...extraction, title: '   ' },
+    { ...extraction, title: 'x'.repeat(201) },
+    { ...extraction, nodes: Array.from({ length: 41 }, (_, i) => ({ ...extraction.nodes[0], id: `step-${i}` })), edges: [] },
+    { ...extraction, webhooks: [{ ...webhookSuggestions[0], payloadFields: [{ name: 'order_id', source: 'literal-value', description: '' }] }] },
+  ]) {
+    let calls = 0
+    const app = buildApp({ repository, parse: createMuseParser({ getKey: async () => 'test-key', send: async () => {
+      calls++
+      return Response.json(envelope(bad))
+    } }) })
+    t.after(() => app.close())
+    const result = await app.inject({ method: 'POST', url: '/api/parse', payload: { prompt: 'Orders' } })
+    assert.equal(result.statusCode, 502)
+    assert.equal(result.json().error.code, 'MUSE_INVALID_RESPONSE')
+    assert.equal(calls, 1)
+  }
+})
+
+test('output exhaustion is distinct from a provider error and never returns a partial draft or retries', async (t) => {
+  for (const [status, body, code] of [
+    [200, { ...envelope(), status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } }, 'MUSE_OUTPUT_LIMIT'],
+    [200, { status: 'incomplete', output: [] }, 'MUSE_INCOMPLETE'],
+    [500, { error: { message: 'private-key and private prompt' } }, 'MUSE_UNAVAILABLE'],
+  ] as const) {
+    let calls = 0
+    const app = buildApp({ repository, parse: createMuseParser({ getKey: async () => 'private-key', send: async () => {
+      calls++
+      return Response.json(body, { status })
+    } }) })
+    t.after(() => app.close())
+    const result = await app.inject({ method: 'POST', url: '/api/parse', payload: { prompt: 'private prompt' } })
+    assert.equal(result.statusCode, 502)
+    assert.equal(result.json().error.code, code)
+    assert.equal(result.json().draft, undefined)
+    assert.ok(!result.body.includes('private'))
     assert.equal(calls, 1)
   }
 })

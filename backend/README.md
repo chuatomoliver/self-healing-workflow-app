@@ -48,6 +48,7 @@ use Vite for the frontend rather than serving the source directory through XAMPP
 | --- | --- | --- | --- |
 | GET | `/api/health` | none | `{ "status": "ok" }`, or 503 if database access fails |
 | POST | `/api/parse` | `{ prompt, attachment? }` | `{ draft: WorkflowDraft, model: "muse-spark-1.3" }`; does not save automatically |
+| POST | `/api/plan` | `WorkflowDraft` | `{ plan: WorkflowPlan, model: "muse-spark-1.3" }`; explicit detailed planning, no automatic save |
 | GET | `/api/workflows` | none | `{ "workflows": [...] }`, latest 50 draft summaries |
 | POST | `/api/workflows` | `WorkflowDraft` | 201, `{ "workflow": SavedWorkflow }` and Location header |
 | GET | `/api/workflows/:id` | UUID path parameter | `{ "workflow": SavedWorkflow }` |
@@ -80,19 +81,19 @@ protection must be implemented with live connectors.
 
 ## Frontend behavior
 
-The Plan Workflow screen supports editing the draft name, saving, listing, and
-opening drafts. Save updates the URL with `?workflow=UUID`; refreshing that URL
-retrieves the draft from MySQL. Opening a draft resets demo playback and
-session history. The original prompt and parsed diagram are saved. Original file
-bytes, canvas layout/name overrides, webhook demo connection states, execution
-history, and repair review state are not persisted in this milestone. Applied
-repair changes to the plan can be saved from the Plan Workflow screen.
+The Plan Workflow screen supports editable step operations, fields, settings,
+mappings, question answers, and webhook configuration. Save updates the URL with
+`?workflow=UUID`; refreshing that URL retrieves the draft from MySQL. The prompt,
+diagram, plan, setup review flags, question answers, canvas positions, and names
+are saved together as a new version. No new migration is needed for these JSON
+draft fields. Original uploaded file bytes and session activity are not persisted.
 
 Descriptions and diagrams submitted with Continue are parsed by Muse through
-`POST /api/parse`. Direct navigation before submission still offers the labeled
-sample. Parsed graphs carry into an initial draft plan; detailed operation setup,
-live execution, webhook delivery, and AI repair remain pending. Database features
-need no Muse key. Sample execution is disabled for parsed workflows.
+`POST /api/parse`. Direct navigation before selecting a workflow shows an empty
+state. `/api/plan` supplies detailed AI planning only when explicitly requested.
+Page navigation, setup edits, saved-draft operations, and activity viewing do not
+call Muse. Live execution, webhook delivery, and AI repair remain pending; no sample
+playback or repair result is loaded by active pages. Database features need no Muse key.
 
 ## Muse parsing endpoint
 
@@ -120,9 +121,21 @@ a corrupt file. User-supplied remote URLs are not accepted.
 The parser loads `MODEL_API_KEY` first, then the saved Windows credential. It sends
 one request to Meta's Responses API using `muse-spark-1.3`, inline image/PDF data,
 `store: false`, strict `text.format` JSON Schema, and at most 8,192 output tokens.
+Parsing requests use minimal reasoning; detailed planning uses low reasoning.
+The schema sent to Muse retains field types, required properties, enums, and closed
+objects. Text patterns and string/array limits are enforced by the backend after
+generation instead of by Muse's constrained decoder. This is a compatibility
+workaround for the repeated workflow-request failures. A live two-step text-only
+workflow passed parsing and backend validation after this change. Larger workflows,
+diagram uploads, and detailed planning still need live verification.
+Output exhaustion returns `MUSE_OUTPUT_LIMIT` rather than a generic provider error;
+partial results never become drafts. With logging enabled, response diagnostics
+contain only operation, HTTP status, provider request ID, and available token counts
+and response status. Prompts, response bodies, and credentials are not logged.
 There are no automatic retries. Calls time out after 90 seconds, and client
-disconnects cancel the upstream request when detected. Only one parse runs at a
-time per server process. API usage charges may still apply after cancellation.
+disconnects cancel the upstream request when detected. Only one parse or detailed
+planning request runs at a time per server process. API usage charges may still
+apply after cancellation.
 
 The model returns title, summary, nodes, edges, review notes, and up to 10 webhook
 suggestions in the same request. Each suggestion links to exactly one step and
@@ -138,21 +151,45 @@ names and credential references. Payload values are dotted field references, nev
 literal credentials or executable expressions. Linked steps receive proposed field
 mappings and webhook setup marked as required. Duplicate suggestion IDs, duplicate
 step links or payload fields, unknown steps, and incompatible roles are rejected.
-Suggestions can be saved and reopened with the draft. The UI keeps them at Needs
-setup and does not allow its sample Connect action to register them or mark them
-connected. Endpoint, provider authentication, receiver schemas, and payload mappings
-still require review and future live connector setup. No suggestion URL is fetched.
+Suggestions can be saved and reopened with the draft. The setup form allows an
+intended HTTPS URL, header and credential reference name, and payload fields to be
+edited. Actual secrets are not entered in the reference field. Endpoint, authentication,
+and payload review flags are validated separately. Reviewed payload mappings must
+agree with the linked step. Configuration is displayed as Configured · not tested;
+it never registers or marks a webhook Connected. No suggestion URL is fetched.
 
-This is extraction plus a draft scaffold, not
-detailed AI planning or executable configuration. No database write occurs until
-the user saves. A successful new parse resets prior demo state and session history.
+Parsing supplies the initial graph and draft scaffold. Detailed planning is a separate
+explicit action. Neither output is an executable engine definition. No database
+write occurs until the user saves. Actual app actions are recorded in session activity.
 
 Errors include `MUSE_NOT_CONFIGURED` (503), key/access or billing failures (503),
 `PARSE_BUSY`/`MUSE_RATE_LIMITED` (429), invalid or rejected AI results (502),
 `NO_WORKFLOW_FOUND` (422), and `MUSE_TIMEOUT` (504). Provider bodies, credentials,
 and raw exceptions are never returned or logged. Parse failures never return the
-sample workflow. See [Meta structured output](https://dev.meta.ai/docs/structured-output)
+an example workflow. See [Meta structured output](https://dev.meta.ai/docs/structured-output)
 and [inline file handling](https://dev.meta.ai/docs/file-handling).
+
+## Detailed planning and setup review
+
+`POST /api/plan` accepts the current `WorkflowDraft` and first validates its graph
+and configuration. It asks Muse for titles, descriptions, operations, input/output
+fields, configuration values, mappings, expected outcome, and open questions for
+the existing node IDs and roles. Missing business rules remain unresolved. The
+server retains graph edges, webhook endpoints, authentication references, and
+human-reviewed steps. Webhook endpoint/authentication properties are excluded from
+the AI context. The user description, graph, step settings, mapping references,
+and question answers are part of the planning context.
+
+The response uses strict structured output, the same server-held key, an 8,192-token
+output limit, a 90-second timeout, and no automatic retries. New AI proposals are
+not marked human-reviewed. Invalid results leave the current draft unchanged.
+Neither page navigation nor editing automatically invokes this endpoint.
+
+Step `reviewed`, plan `structureReviewed`/`generatedBy`, question `answer`, and
+webhook `setup` review flags are optional for compatibility with older drafts.
+`shared/setup.ts` derives current setup progress and checks. Reviewed settings must
+be valid; webhook payload review must match its step's mappings. Addresses remain
+inert until a separate live connection/execution service is implemented.
 
 ## Save your Muse API key once
 

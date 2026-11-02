@@ -9,11 +9,15 @@ import { MAX_PARSE_BODY_BYTES, MUSE_PARSE_MODEL } from '../../shared/parsing.ts'
 import type { ParseWorkflowRequest, WorkflowExtraction } from '../../shared/parsing.ts'
 import { createMuseParser, validateParseInput } from './muse/parser.ts'
 import type { MuseParser } from './muse/parser.ts'
+import type { MuseResponseDetails } from './muse/client.ts'
 import { extractionSchema, parseRequestSchema } from './muse/parsing-schema.ts'
 import { draftFromExtraction } from './muse/draft.ts'
+import { createMusePlanner, planFromProposal, planningSchema } from './muse/planning.ts'
+import type { MusePlanner } from './muse/planning.ts'
+import type { PlanWorkflowRequest, PlanningProposal } from '../../shared/planning.ts'
 
-type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser }
-export function buildApp({ repository, logger = false, port = 3001, parse = createMuseParser() }: AppOptions) {
+type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner }
+export function buildApp({ repository, logger = false, port = 3001, parse, plan }: AppOptions) {
   const app = Fastify({
     logger: logger ? { level: 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -21,6 +25,11 @@ export function buildApp({ repository, logger = false, port = 3001, parse = crea
     requestTimeout: 15000,
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false, useDefaults: false, allErrors: false } },
   })
+  const reportMuse = (details: MuseResponseDetails) => {
+    app.log.info(details, 'Muse response')
+  }
+  const parseWorkflow = parse ?? createMuseParser({ onResponse: reportMuse })
+  const planWorkflow = plan ?? createMusePlanner({ onResponse: reportMuse })
   const allowedOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'])
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store').header('X-Content-Type-Options', 'nosniff')
@@ -53,6 +62,25 @@ export function buildApp({ repository, logger = false, port = 3001, parse = crea
   app.setNotFoundHandler((request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'This API endpoint could not be found.', requestId: request.id } }))
   app.get('/api/health', async () => { await repository.health(); return { status: 'ok' } })
   let parsing = false
+  app.post<{ Body: PlanWorkflowRequest }>('/api/plan', { schema: { body: draftSchema } }, async (request, reply) => {
+    validateDraft(request.body)
+    if (parsing) throw new ApiError(429, 'PARSE_BUSY', 'Another AI request is in progress. Wait for it to finish.')
+    parsing = true
+    const controller = new AbortController()
+    const disconnect = () => { if (!reply.raw.writableFinished) controller.abort() }
+    reply.raw.once('close', disconnect)
+    try {
+      const proposal = await planWorkflow(request.body, controller.signal)
+      if (!request.compileValidationSchema(planningSchema)(proposal)) throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an invalid plan. Your current draft has not been replaced.')
+      const nextPlan = planFromProposal(request.body, proposal as PlanningProposal)
+      const draft = { ...request.body, plan: nextPlan }
+      try {
+        if (!request.compileValidationSchema(draftSchema)(draft)) throw new Error('Invalid plan')
+        validateDraft(draft)
+      } catch { throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an inconsistent plan. Your current draft has not been replaced.') }
+      return { plan: nextPlan, model: MUSE_PARSE_MODEL }
+    } finally { parsing = false; reply.raw.removeListener('close', disconnect) }
+  })
   app.post<{ Body: ParseWorkflowRequest }>('/api/parse', {
     bodyLimit: MAX_PARSE_BODY_BYTES, schema: { body: parseRequestSchema },
   }, async (request, reply) => {
@@ -63,7 +91,7 @@ export function buildApp({ repository, logger = false, port = 3001, parse = crea
     const disconnect = () => { if (!reply.raw.writableFinished) controller.abort() }
     reply.raw.once('close', disconnect)
     try {
-      const extracted = await parse(request.body, controller.signal)
+      const extracted = await parseWorkflow(request.body, controller.signal)
       if (!request.compileValidationSchema(extractionSchema)(extracted)) {
         throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an invalid workflow structure. Review your input and try again.')
       }

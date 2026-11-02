@@ -5,7 +5,7 @@ import { getWorkflow, listWorkflows, saveWorkflow } from '../api'
 import { isWorkflowDirty } from '../draftState'
 
 type Props = {
-  draft: WorkflowDraft
+  draft: WorkflowDraft | null
   saved: SavedWorkflow | null
   onSaved: (workflow: SavedWorkflow) => void
   onOpen: (workflow: SavedWorkflow) => void
@@ -22,7 +22,7 @@ export function WorkflowStorage({ draft, saved, onSaved, onOpen, onRename }: Pro
   const [refresh, setRefresh] = useState(0)
   const locked = useRef(false)
   const mounted = useRef(false)
-  const dirty = isWorkflowDirty(draft, saved)
+  const dirty = draft ? isWorkflowDirty(draft, saved) : false
 
   useEffect(() => {
     mounted.current = true
@@ -40,6 +40,7 @@ export function WorkflowStorage({ draft, saved, onSaved, onOpen, onRename }: Pro
   }, [refresh])
 
   async function save() {
+    if (!draft) return
     if (locked.current) return
     locked.current = true
     setBusy(true); setError(''); setMessage('')
@@ -80,13 +81,13 @@ export function WorkflowStorage({ draft, saved, onSaved, onOpen, onRename }: Pro
       </div>
       <span className="text-[11px] text-muted">{saved ? `Version ${saved.version} · ${dirty ? 'Unsaved changes' : 'Saved'}` : 'Not saved yet'}</span>
     </div>
-    <div className="mt-4 flex flex-wrap items-end gap-3">
+    {draft && <div className="mt-4 flex flex-wrap items-end gap-3">
       <label className="grid min-w-0 grow gap-2 text-[11px] font-medium" htmlFor="draft-title">Draft name
         <input id="draft-title" value={draft.plan.title} maxLength={200} disabled={busy} onChange={(event) => { onRename(event.target.value); setMessage('') }}
           className="min-h-10 rounded-md border border-line bg-surface px-3 text-xs disabled:opacity-50" />
       </label>
       <Button variant="secondary" disabled={busy || !dirty || !draft.plan.title.trim()} onClick={() => { void save() }}>{busy ? 'Please wait…' : 'Save draft'}</Button>
-    </div>
+    </div>}
     <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4">
       <div className="grid min-w-0 grow gap-2 text-[11px] font-medium">
         <label htmlFor="saved-drafts">Saved drafts</label>
