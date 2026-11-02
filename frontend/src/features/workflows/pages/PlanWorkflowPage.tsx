@@ -8,6 +8,7 @@ import { PlanStepDetails } from '../components/PlanStepDetails'
 import { PlanWebhooks } from '../components/PlanWebhooks'
 import { WebhookTemplateDialog } from '../components/WebhookTemplateDialog'
 import { PlanChecks } from '../components/PlanChecks'
+import { canConnectWebhookDemo } from '../webhookReview'
 import type { PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../types'
 import type { ReactNode } from 'react'
 
@@ -39,7 +40,7 @@ export function PlanWorkflowPage({ plan, prompt, sourceFile, webhookConnections,
 
   function connectWebhook(templateId: string) {
     const template = plan.webhooks.find((item) => item.id === templateId)
-    if (!template || webhookConnections[templateId] === 'connected-demo') return
+    if (!template || !canConnectWebhookDemo(template) || webhookConnections[templateId] === 'connected-demo') return
     onConnectWebhook(templateId)
     setAnnouncement(`${template.name} connected.`)
   }
@@ -53,7 +54,7 @@ export function PlanWorkflowPage({ plan, prompt, sourceFile, webhookConnections,
         </p>
         <h1 className="mb-4 text-[clamp(1.875rem,3vw,2.625rem)] leading-tight font-[650] tracking-[-1.3px]">Review the workflow plan.</h1>
         <p className="max-w-2xl text-xs leading-[1.8] text-muted md:text-[13px]">
-          Review steps and connect webhook templates before opening the canvas.
+          {plan.webhooks.some((webhook) => webhook.suggestedBy === 'muse') ? 'Review the extracted steps and suggested webhooks. Endpoint, authentication, and payload setup still need review.' : plan.webhooks.length ? 'Review steps and connect webhook templates before opening the canvas.' : 'Review the extracted steps and unresolved configuration before opening the canvas.'}
         </p>
       </header>
 

@@ -24,6 +24,7 @@ export type PlanStepConfiguration = {
 }
 export type PlanStep = PlanStepConfiguration & { id: string; title: string; role: DiagramNodeRole; description: string }
 export type PlanWebhookTemplate = {
+  suggestedBy?: 'muse'
   id: string
   name: string
   direction: 'incoming' | 'outgoing'

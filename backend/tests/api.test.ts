@@ -57,6 +57,8 @@ test('validates graph integrity and webhook credential references before storage
     (draft) => { draft.plan.edges[0].target = 'missing' },
     (draft) => { draft.diagram.nodes[1].id = 'start' },
     (draft) => { draft.plan.steps[1].webhookTemplateId = 'missing' },
+    (draft) => { draft.plan.edges = [] },
+    (draft) => { draft.plan.webhooks[0].direction = 'incoming' },
     (draft) => { draft.plan.sourceDiagramId = 'missing' },
     (draft) => { draft.plan.questions.push({ id: 'q', stepId: 'missing', question: '', explanation: '' }) },
     (draft) => { draft.plan.edges.push({ id: 'cycle', source: 'send', target: 'start' }) },

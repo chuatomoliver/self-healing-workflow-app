@@ -17,7 +17,8 @@ import { useSessionHistory } from './features/history/hooks/useSessionHistory'
 import { WorkflowStorage } from './features/workflows/components/WorkflowStorage'
 import { getWorkflow } from './features/workflows/api'
 import { Button } from './components/ui/Button'
-import type { SavedWorkflow } from '../../shared/workflows'
+import type { SavedWorkflow, WorkflowDraft } from '../../shared/workflows'
+import { parseWorkflow } from './features/diagram-parsing/api'
 
 const RunCanvasPage = lazy(() => import('./features/canvas/pages/RunCanvasPage').then((module) => ({ default: module.RunCanvasPage })))
 const SelfHealPage = lazy(() => import('./features/healing/pages/SelfHealPage').then((module) => ({ default: module.SelfHealPage })))
@@ -27,7 +28,7 @@ const ContextLogsPage = lazy(() => import('./features/history/pages/ContextLogsP
 function App() {
   const navigate = useNavigate()
   const [initialId] = useState(() => new URLSearchParams(window.location.search).get('workflow'))
-  const [workspace, setWorkspace] = useState<{ workflow: SavedWorkflow | null; key: number }>({ workflow: null, key: 0 })
+  const [workspace, setWorkspace] = useState<{ workflow: SavedWorkflow | null; draft?: WorkflowDraft; file?: File | null; key: number }>({ workflow: null, key: 0 })
   const [loading, setLoading] = useState(Boolean(initialId))
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
@@ -48,20 +49,33 @@ function App() {
       <a href={workflowRoutes.plan} className="ml-4 text-xs text-accent underline">Return to workflow plans</a>
     </div>}
   </AppLayout>
-  return <WorkflowWorkspace key={workspace.key} initialWorkflow={workspace.workflow} onOpen={(workflow) => {
+  return <WorkflowWorkspace key={workspace.key} initialWorkflow={workspace.workflow} initialDraft={workspace.draft} initialFile={workspace.file} onParsed={(draft, file) => {
+    setWorkspace((current) => ({ workflow: null, draft, file, key: current.key + 1 }))
+    navigate(workflowRoutes.parse)
+  }} onOpen={(workflow) => {
     setWorkspace((current) => ({ workflow, key: current.key + 1 }))
     navigate(`${workflowRoutes.plan}?workflow=${encodeURIComponent(workflow.id)}`)
   }} />
 }
 
-function WorkflowWorkspace({ initialWorkflow, onOpen }: { initialWorkflow: SavedWorkflow | null; onOpen: (workflow: SavedWorkflow) => void }) {
-  const draft = useIngestionDraft(initialWorkflow?.prompt)
+function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParsed, onOpen }: {
+  initialWorkflow: SavedWorkflow | null
+  initialDraft?: WorkflowDraft
+  initialFile?: File | null
+  onParsed: (draft: WorkflowDraft, file: File | null) => void
+  onOpen: (workflow: SavedWorkflow) => void
+}) {
+  const initial = initialWorkflow ?? initialDraft
+  const draft = useIngestionDraft(initial?.prompt, initialFile)
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const previousPath = useRef(pathname)
-  const [plan, setPlan] = useState<WorkflowPlan>(initialWorkflow?.plan ?? samplePlan)
+  const [plan, setPlan] = useState<WorkflowPlan>(initial?.plan ?? samplePlan)
   const [savedWorkflow, setSavedWorkflow] = useState(initialWorkflow)
-  const diagram = initialWorkflow?.diagram ?? sampleDiagram
+  const diagram = initial?.diagram ?? sampleDiagram
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState('')
+  const parseRequest = useRef<AbortController | null>(null)
   const initialCanvasPositions = Object.fromEntries(diagram.nodes.map((node) => [node.id, node.position]))
   const webhooks = useWebhookConnections(plan.webhooks)
   const canvasDraft = useCanvasDraft(plan, initialCanvasPositions)
@@ -77,6 +91,32 @@ function WorkflowWorkspace({ initialWorkflow, onOpen }: { initialWorkflow: Saved
     if (leftCanvas) stopRun()
   }, [pathname, stopRun])
 
+  useEffect(() => () => { parseRequest.current?.abort() }, [])
+  useEffect(() => {
+    if (pathname !== workflowRoutes.parse) {
+      parseRequest.current?.abort()
+    }
+  }, [pathname])
+
+  async function startParse() {
+    if (parseRequest.current) return
+    const prepared = draft.prepareDraft()
+    if (!prepared) return
+    const controller = new AbortController()
+    parseRequest.current = controller
+    setParsing(true)
+    setParseError('')
+    navigate(workflowRoutes.parse)
+    try {
+      const result = await parseWorkflow(prepared.prompt, prepared.diagram, controller.signal)
+      if (!controller.signal.aborted) onParsed(result.draft, prepared.diagram)
+    } catch (error) {
+      if (!controller.signal.aborted) setParseError(error instanceof Error ? error.message : 'The workflow could not be parsed.')
+    } finally {
+      if (parseRequest.current === controller) { parseRequest.current = null; setParsing(false) }
+    }
+  }
+
   function applyRepair(nextPlan: WorkflowPlan, frames: DemoRunFrame[], sourceFrame: DemoRunFrame) {
     if (run.frame !== sourceFrame || run.frame.status !== 'failed') throw new Error('The run has changed. Review its current state before applying a repair.')
     setPlan(nextPlan)
@@ -89,12 +129,20 @@ function WorkflowWorkspace({ initialWorkflow, onOpen }: { initialWorkflow: Saved
     <AppLayout>
       <Routes>
         <Route path={workflowRoutes.describe} element={
-          <DescribeUploadPage draft={draft} onContinue={() => navigate(workflowRoutes.parse)} />
+          <DescribeUploadPage draft={draft} onContinue={() => { void startParse() }} />
         } />
         <Route path={workflowRoutes.parse} element={
-          <ParseDiagramPage result={diagram} sourceFile={draft.diagram}
+          parsing || parseError ? <section className="my-12 rounded-xl border border-line bg-surface p-6" aria-busy={parsing}>
+            <h1 className="text-xl font-semibold">{parsing ? 'Parsing your workflow with Muse…' : 'Parsing needs attention'}</h1>
+            {parsing ? <p role="status" className="mt-3 text-xs text-muted">Reading the description and diagram. This can take up to 90 seconds.</p>
+              : <p role="alert" className="mt-3 text-xs leading-relaxed text-danger">{parseError}</p>}
+            <div className="mt-5 flex gap-3">
+              {!parsing && <Button onClick={() => { void startParse() }}>Try again</Button>}
+              <Button variant="secondary" onClick={() => { parseRequest.current?.abort(); navigate(workflowRoutes.describe) }}>{parsing ? 'Cancel' : 'Back to input'}</Button>
+            </div>
+          </section> : <ParseDiagramPage result={diagram} sourceFile={draft.diagram}
             sourceUrl={draft.previewUrl} prompt={draft.prompt}
-            onContinue={() => navigate(workflowRoutes.plan)} />
+            isSample={diagram.id === sampleDiagram.id} onContinue={() => navigate(workflowRoutes.plan)} />
         } />
         <Route path={workflowRoutes.plan} element={
           <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading plan…</p>}>
@@ -110,7 +158,7 @@ function WorkflowWorkspace({ initialWorkflow, onOpen }: { initialWorkflow: Saved
         } />
         <Route path={workflowRoutes.canvas} element={
           <Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading the canvas…</p>}>
-            <RunCanvasPage plan={plan} draft={canvasDraft} webhookConnections={webhooks.connections}
+            <RunCanvasPage plan={plan} draft={canvasDraft} webhookConnections={webhooks.connections} allowSamplePlayback={diagram.id === sampleDiagram.id}
               onConnectWebhook={webhooks.connect} run={run} hasRepairReview={healing.review !== null}
               onReviewRepair={() => navigate(workflowRoutes.heal)}
               onViewLogs={() => navigate(run.runId ? `${workflowRoutes.logs}?run=${encodeURIComponent(run.runId)}` : workflowRoutes.logs)} />

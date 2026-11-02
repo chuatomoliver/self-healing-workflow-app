@@ -15,8 +15,10 @@ Vite serves `http://127.0.0.1:5173` and proxies `/api` to the backend at port `3
 Use `npm.cmd` in Windows PowerShell to avoid script execution-policy errors;
 on other systems, use `npm`. Start and configure the Fastify + MySQL backend as
 described in the [main README](../README.md#run-locally) to save or reopen drafts.
-The UI still uses sample data for parsing, planning, execution, and repair. The
-standalone Muse key setup/test tools do not enable AI requests from these pages.
+Continue submits the description and optional diagram to the Fastify parsing
+endpoint, which calls Muse using the server-held key. Parsed graphs carry into a
+draft plan. Detailed AI planning, live execution, and AI repair are still pending;
+the labeled support example retains its existing sample behavior.
 
 ## Scripts
 
@@ -59,43 +61,51 @@ utilities instead of a separate page stylesheet.
 ## Describe or Upload
 
 Accepts a description, a PNG/JPG/PDF diagram, or both. Descriptions are limited to
-4,000 characters and diagrams to 10 MB. Files stay local; image thumbnails and
-file preview links use temporary object URLs, which are released on replacement,
-removal, or unmounting.
+4,000 characters and diagrams to 10 MB. Image thumbnails and file preview links
+use temporary object URLs, released on replacement, removal, or unmounting.
+Files stay local until Continue sends the description and optional file bytes
+through the backend to Meta for parsing. The form discloses that submission and
+API usage may apply. No API key is entered or stored in the browser.
 
-For the current interface preview, Continue navigates every valid draft (text,
-diagram, or both) to `/parse-diagram`. Empty submissions stay on the first page
-with a validation error. The draft's `nextStep` metadata still distinguishes
-diagram parsing from text-only planning for later integration, but it does not
-control preview navigation. React Router connects the two pages, including browser
+Continue validates every draft (text, diagram, or both), submits `POST /api/parse`,
+and navigates to `/parse-diagram` with a loading/cancel state. Empty submissions
+stay on the first page with a validation error. Text-only descriptions also use
+Muse parsing. React Router connects the two pages, including browser
 Back/Forward and sidebar navigation. The draft and its object URL are owned above
 the page routes, so the file and description survive navigation between pages.
 Unsaved descriptions and uploaded files are not persisted across a page reload.
 Descriptions explicitly saved from Plan Workflow can be restored with the saved
-draft, but the original uploaded file bytes cannot. Client validation is a usability check;
-the future backend must validate file content, size, and request data independently.
+draft, but the original uploaded file bytes cannot. Client validation is a usability
+check; the backend also checks the request schema, file size, type, and signature.
 
 ## Parse Diagram
 
 Open `/parse-diagram` directly or use the sidebar to inspect the sample without
-selecting a file. The page shows a support-request example with an urgency branch.
-It does not analyze, upload, or infer anything from an attached file.
+selecting a file. Before submission, the page shows a labeled support-request
+sample. After a successful submission, it shows the actual validated Muse result
+or a reopened saved graph, with extracted steps, connections, and review notes.
 
-`features/diagram-parsing/data/sampleDiagram.ts` supplies one typed frontend view
-model. The React Flow graph, extracted-node list, extracted-edge list, counts, and
-review notes all render from that model. Node selection works from the graph or
+`features/diagram-parsing/api.ts` submits text and optional base64 file bytes with
+a cancellable timeout, translates known server errors, and never sends credentials.
+Only the backend calls Meta. It makes no automatic retries and does not fall back
+to a sample after a failed parse. Returning to another stage cancels an active
+parse; aborted results are not adopted. The prior workspace is replaced only by a
+successful result, resetting playback, repair, webhook state, and history.
+
+The React Flow graph, extracted-node list, extracted-edge list, counts, and
+review notes render from the returned graph. Node selection works from the graph or
 the list, including the graph's keyboard selection, and updates the detail panel.
 The graph supports pan, zoom, and fit-to-view; it is not an editable workflow yet.
 
-Muse integration will replace the sample with validated results from the Fastify
-backend. Shared draft transport types already live in `../shared/workflows.ts`;
-the AI response endpoints remain to be implemented. The current view model
-includes graph display positions. Confirm & continue opens Plan Workflow at
+Shared contracts live in `../shared/workflows.ts` and `../shared/parsing.ts`.
+The backend validates structured Muse output and supplies graph positions and
+a matching initial plan. Confirm & continue opens Plan Workflow at
 `/plan-workflow`; navigation alone does not save or approve a workflow on the server.
 
 ## Plan Workflow
 
-`/plan-workflow` continues the same support-request scenario. It is reachable from
+`/plan-workflow` reviews the parsed graph's draft, a saved draft, or the default
+support-request sample. It is reachable from
 Parse Diagram or the sidebar, and it can also be opened directly. The original
 prompt and selected file remain available while moving between pages.
 
@@ -104,7 +114,11 @@ node IDs and edges with proposed operations, configuration, inputs/outputs,
 mappings, webhook suggestions, open questions, and sample review states. The
 components receive a typed view model whose diagram and plan types are shared
 with the backend draft transport. It is not an executable workflow-engine
-definition; AI-specific response contracts remain to be implemented.
+definition. For parsed input, the backend derives a plan from the extracted nodes
+with operation setup marked as missing. Muse can suggest incoming/outgoing webhooks
+and proposed payload fields in the same parse request. Linked steps receive the
+suggested mappings; other operation mappings remain empty. Detailed AI planning
+and live connector setup remain to be implemented.
 
 Selecting a proposed step updates its detail panel. Inspect related step links
 an open question to that panel. The unresolved urgency rule is carried over from
@@ -119,7 +133,7 @@ and a sample explanation of why MUSE might suggest it. Steps refer to templates
 through `webhookTemplateId`. These are illustrative custom contracts, not native
 Email, Slack, or Helpdesk API schemas; a real source or receiver may need an adapter.
 
-Connect applies a template in local UI state immediately and updates its card,
+For the original sample workflow, Connect applies a template in local UI state immediately and updates its card,
 progress count, and linked step details to **Connected**. View template
 opens its endpoint / authentication / payload preview and also offers Connect.
 The shared `useWebhookConnections` hook owns this simulated operation above the
@@ -136,6 +150,14 @@ Do not infer real endpoint URLs or credentials from AI-generated text. Mark a
 connection live only after the backend confirms setup. Live webhook setup and
 execution checks remain pending even after all demo templates are connected.
 
+Muse-generated templates are labeled Suggested by Muse and Needs setup. Cards show
+the reason and related steps; Review setup opens the placeholder endpoint,
+authentication reference, proposed payload, and a setup checklist. These contracts
+are proposals, not verified vendor schemas. They never offer the sample Connect
+button and cannot inherit Connected status from a stale demo state. The provenance
+is saved with the draft. Reviewing, saving, and reopening suggestions make no new
+Muse request. Only a new explicit parsing submission uses the API.
+
 The structured JSON section is collapsible. Build on canvas opens `/run-on-canvas`.
 The Workflow draft section supports renaming, saving, listing, and reopening drafts
 through the Fastify API. Save draft persists `{ prompt, diagram, plan }` to MySQL
@@ -143,7 +165,8 @@ and adds `?workflow=UUID` to the URL so a refresh can reload it. Updates use the
 saved version and show a conflict if another tab saved first. Opening a saved draft
 resets demo playback and session history. Uploaded file bytes, canvas overrides,
 webhook connection states, and history are not saved. Applied repair changes to
-the plan can be saved here. No Muse calls or live workflow execution are performed.
+the plan can be saved here. Opening this page does not make another Muse call;
+live workflow execution is not available.
 
 ## Run on Canvas
 
@@ -154,6 +177,8 @@ dropdown to inspect it. The inspector can apply a display name (1–80 trimmed
 characters), show field mappings and sample output, and open the same webhook
 template dialog used by planning. Adding/removing steps or rewiring paths is not
 implemented. Reset layout restores positions without changing display names.
+Parsed workflows can be arranged and inspected, but Run workflow is disabled:
+the sample playback scenarios apply only to the original support example.
 
 `useCanvasDraft` owns canvas names and positions above the routes, alongside
 the webhook connection state. These survive navigation; reloading resets them.

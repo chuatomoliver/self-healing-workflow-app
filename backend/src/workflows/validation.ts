@@ -42,16 +42,33 @@ export function validateDraft(draft: WorkflowDraft) {
   for (const step of plan.steps) {
     if (step.role !== diagram.nodes.find((node) => node.id === step.id)!.role) invalid('Plan step roles must match their diagram nodes.')
     if (step.webhookTemplateId && !webhooks.has(step.webhookTemplateId)) invalid('Plan steps must reference existing webhook templates.')
+    const webhook = plan.webhooks.find((item) => item.id === step.webhookTemplateId)
+    if (webhook && step.role !== (webhook.direction === 'incoming' ? 'trigger' : 'action')) invalid('Incoming webhooks require trigger steps and outgoing webhooks require action steps.')
   }
   for (const question of plan.questions) if (!steps.has(question.stepId)) invalid('Questions must reference existing steps.')
   validateEdges(diagram.edges, nodes, 'Diagram')
   validateEdges(plan.edges, steps, 'Plan')
+  const signature = (edges: DiagramEdge[]) => edges.map((edge) => JSON.stringify([edge.source, edge.target, edge.label ?? ''])).sort()
+  if (JSON.stringify(signature(diagram.edges)) !== JSON.stringify(signature(plan.edges))) invalid('Plan connections must match the source diagram.')
   // URLs are only draft templates. Nothing here resolves credentials or makes requests.
   for (const webhook of plan.webhooks) {
     let url: URL
     try { url = new URL(webhook.endpoint.urlTemplate) } catch { invalid('Webhook endpoint templates must be valid HTTPS URLs.') }
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
       invalid('Webhook templates require HTTPS without embedded credentials, query strings, or fragments.')
+    }
+    if (webhook.suggestedBy === 'muse') {
+      if (plan.steps.filter((step) => step.webhookTemplateId === webhook.id).length !== 1) invalid('Each Muse webhook suggestion must reference exactly one step.')
+      const incoming = webhook.direction === 'incoming'
+      if (webhook.endpoint.kind !== (incoming ? 'managed' : 'external')
+        || url.hostname !== (incoming ? 'api.example.invalid' : 'hooks.example.invalid')) {
+        invalid('Unconfigured Muse webhook suggestions must retain their placeholder endpoints.')
+      }
+      const fields = Object.keys(webhook.payloadTemplate)
+      if (fields.length < 1 || fields.length > 20 || !fields.every((field) => /^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(field))
+        || !Object.values(webhook.payloadTemplate).every((value) => value.length <= 204 && /^\{\{[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*){1,8}\}\}$/.test(value))) {
+        invalid('Muse webhook payload suggestions must contain field references only.')
+      }
     }
   }
 }

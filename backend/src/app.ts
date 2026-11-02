@@ -5,9 +5,15 @@ import { ApiError } from './errors.ts'
 import type { WorkflowRepository } from './workflows/repository.ts'
 import { draftSchema, listQuerySchema, updateSchema, workflowParamsSchema } from './workflows/schema.ts'
 import { validateDraft } from './workflows/validation.ts'
+import { MAX_PARSE_BODY_BYTES, MUSE_PARSE_MODEL } from '../../shared/parsing.ts'
+import type { ParseWorkflowRequest, WorkflowExtraction } from '../../shared/parsing.ts'
+import { createMuseParser, validateParseInput } from './muse/parser.ts'
+import type { MuseParser } from './muse/parser.ts'
+import { extractionSchema, parseRequestSchema } from './muse/parsing-schema.ts'
+import { draftFromExtraction } from './muse/draft.ts'
 
-type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number }
-export function buildApp({ repository, logger = false, port = 3001 }: AppOptions) {
+type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser }
+export function buildApp({ repository, logger = false, port = 3001, parse = createMuseParser() }: AppOptions) {
   const app = Fastify({
     logger: logger ? { level: 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -39,13 +45,43 @@ export function buildApp({ repository, logger = false, port = 3001 }: AppOptions
     } else if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
       status = error.statusCode
       code = status === 413 ? 'PAYLOAD_TOO_LARGE' : 'INVALID_REQUEST'
-      message = status === 413 ? 'Keep workflow requests within 512 KB.' : 'The request could not be processed.'
+      message = status === 413 ? 'This request is too large. Diagrams must be within 10 MB and saved drafts within 512 KB.' : 'The request could not be processed.'
     }
     if (status >= 500) app.log.error({ requestId: request.id, code }, 'Request failed')
     reply.code(status).send({ error: { code, message, requestId: request.id } })
   })
   app.setNotFoundHandler((request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'This API endpoint could not be found.', requestId: request.id } }))
   app.get('/api/health', async () => { await repository.health(); return { status: 'ok' } })
+  let parsing = false
+  app.post<{ Body: ParseWorkflowRequest }>('/api/parse', {
+    bodyLimit: MAX_PARSE_BODY_BYTES, schema: { body: parseRequestSchema },
+  }, async (request, reply) => {
+    validateParseInput(request.body)
+    if (parsing) throw new ApiError(429, 'PARSE_BUSY', 'A workflow is already being parsed. Wait for it to finish before trying again.')
+    parsing = true
+    const controller = new AbortController()
+    const disconnect = () => { if (!reply.raw.writableFinished) controller.abort() }
+    reply.raw.once('close', disconnect)
+    try {
+      const extracted = await parse(request.body, controller.signal)
+      if (!request.compileValidationSchema(extractionSchema)(extracted)) {
+        throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an invalid workflow structure. Review your input and try again.')
+      }
+      const extraction = extracted as WorkflowExtraction
+      if (!extraction.nodes.length) throw new ApiError(422, 'NO_WORKFLOW_FOUND', 'No workflow could be identified. Describe the trigger, actions, and connections or use a clearer diagram.')
+      const draft = draftFromExtraction(extraction, request.body.prompt)
+      try {
+        if (!request.compileValidationSchema(draftSchema)(draft)) throw new Error('Invalid draft')
+        validateDraft(draft)
+      } catch {
+        throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned inconsistent steps or connections. Clarify the workflow and try again.')
+      }
+      return { draft, model: MUSE_PARSE_MODEL }
+    } finally {
+      parsing = false
+      reply.raw.removeListener('close', disconnect)
+    }
+  })
   app.get('/api/workflows', { schema: { querystring: listQuerySchema } }, async () => ({ workflows: await repository.list() }))
   app.post<{ Body: WorkflowDraft }>('/api/workflows', { schema: { body: draftSchema } }, async (request, reply) => {
     validateDraft(request.body)

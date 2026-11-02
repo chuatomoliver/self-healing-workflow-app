@@ -30,7 +30,7 @@ export function PlanStepDetails({ step, plan, containerRef, webhookConnections, 
         <p className="mt-1 text-xs font-medium">{step.operation}</p>
         <p className="mt-1 text-[10px] text-muted">{webhook ? `${webhook.name} · ${webhook.direction} webhook` : 'Workflow logic'}</p>
       </div>
-      {webhook && <div className="flex flex-wrap items-center gap-3"><WebhookStatus state={webhookConnections[webhook.id]} /><Button variant="text" size="inline" onClick={() => onReviewWebhook(webhook)}>View webhook<Icon name="arrow" width="12" height="12" /></Button></div>}
+      {webhook && <div className="flex flex-wrap items-center gap-3"><WebhookStatus template={webhook} state={webhookConnections[webhook.id]} /><Button variant="text" size="inline" onClick={() => onReviewWebhook(webhook)}>View webhook<Icon name="arrow" width="12" height="12" /></Button></div>}
     </div>
 
     <div className="mt-5">

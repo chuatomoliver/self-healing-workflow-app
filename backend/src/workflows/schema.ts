@@ -7,7 +7,7 @@ const list = (items: Schema, maxItems = 200, minItems = 0): Schema => ({ type: '
 const role = choice('trigger', 'transform', 'decision', 'action')
 const edge = object({ id, source: id, target: id, label: text(200) }, ['id', 'source', 'target'])
 const field = object({ name: text(200, 1), description: text() })
-const webhook = object({
+const webhookProperties = {
   id, name: text(200, 1), direction: choice('incoming', 'outgoing'), method: choice('POST'),
   event: text(200, 1), purpose: text(), suggestionReason: text(),
   endpoint: object({ kind: choice('managed', 'external'), urlTemplate: text(2048, 1) }),
@@ -17,7 +17,8 @@ const webhook = object({
     secretRef: id,
   }),
   payloadTemplate: { type: 'object', maxProperties: 100, propertyNames: id, additionalProperties: text() },
-})
+}
+const webhook = object({ ...webhookProperties, suggestedBy: choice('muse') }, Object.keys(webhookProperties))
 export const draftSchema = object({
   prompt: text(4000),
   diagram: object({

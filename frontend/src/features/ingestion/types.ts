@@ -1,7 +1,7 @@
 export type IngestionDraft = {
   prompt: string
   diagram: File | null
-  nextStep: 'parse-diagram' | 'review-plan'
+  nextStep: 'parse-diagram'
 }
 
 export type DraftResult =

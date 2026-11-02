@@ -9,12 +9,12 @@ test('requires a description or a diagram, including whitespace-only input', () 
   assert.equal(prepareIngestionDraft(' \n\t ', null).ok, false)
 })
 
-test('trims text and skips parsing when there is no diagram', () => {
+test('trims text and routes text-only descriptions to Muse parsing', () => {
   const result = prepareIngestionDraft('  Send an order summary.  ', null)
   assert.equal(result.ok, true)
   if (result.ok) {
     assert.equal(result.draft.prompt, 'Send an order summary.')
-    assert.equal(result.draft.nextStep, 'review-plan')
+    assert.equal(result.draft.nextStep, 'parse-diagram')
     assert.equal(result.draft.diagram, null)
   }
 })
