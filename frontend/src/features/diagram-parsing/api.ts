@@ -3,6 +3,7 @@ import { MUSE_PARSE_MODEL } from '../../../../shared/parsing.ts'
 import { prepareIngestionDraft } from '../ingestion/validation.ts'
 
 const errors: Record<string, string> = {
+  CONNECTIONS_UNAVAILABLE: 'Saved service connections could not be loaded. Check the backend connection setup before trying again.',
   MUSE_NOT_CONFIGURED: 'Muse is not configured. Run npm.cmd run muse:setup from the backend folder, then try again.',
   MUSE_KEY_STORAGE_UNAVAILABLE: 'The backend cannot read the saved key. Check its Windows account or supply MODEL_API_KEY.',
   MUSE_AUTH_FAILED: 'The Muse key or model access was rejected. Run Muse setup again in the backend folder.',
@@ -12,6 +13,7 @@ const errors: Record<string, string> = {
   PARSE_BUSY: 'Another workflow is being parsed. Wait for it to finish before trying again.',
   MUSE_TIMEOUT: 'Parsing timed out or was cancelled. A request may already have reached Muse; review before trying again.',
   MUSE_INVALID_RESPONSE: 'Muse could not produce a valid workflow. Clarify the steps and connections or use a clearer diagram.',
+  MUSE_INVALID_WEBHOOK_EVENT: 'Muse returned an unsupported webhook event name. Specify an event such as order.created in your description. Your draft is unchanged; no automatic retry was made.',
   MUSE_OUTPUT_LIMIT: 'Muse reached its output limit before finishing. Try a smaller workflow. No automatic retry was made.',
   MUSE_INCOMPLETE: 'Muse did not finish generating the workflow. No automatic retry was made.',
   MUSE_INPUT_REJECTED: 'Muse could not process this input. Try a clearer description or a different diagram.',
@@ -38,7 +40,7 @@ export async function parseWorkflow(prompt: string, file: File | null, signal: A
   signal.throwIfAborted()
   let response: Response
   try {
-    response = await fetch('/api/parse', {
+    response = await fetch('/api/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
       signal: AbortSignal.any([signal, AbortSignal.timeout(110000)]),
       body: JSON.stringify({ prompt: prepared.draft.prompt, ...(attachment ? { attachment } : {}) }),

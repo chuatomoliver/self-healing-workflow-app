@@ -9,7 +9,7 @@ test('parsing submits the actual description and image bytes without a browser A
   let calls = 0
   t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
     calls++
-    assert.equal(url, '/api/parse')
+    assert.equal(url, '/api/prepare')
     assert.equal(options.method, 'POST')
     assert.equal(new Headers(options.headers).get('Authorization'), null)
     const body = JSON.parse(String(options.body))
@@ -25,6 +25,7 @@ test('parsing submits the actual description and image bytes without a browser A
 test('provider failure and exhausted output have different messages without automatic retry', async (t) => {
   for (const [code, message] of [
     ['MUSE_OUTPUT_LIMIT', /output limit/], ['MUSE_INCOMPLETE', /did not finish/], ['MUSE_UNAVAILABLE', /server error/],
+    ['MUSE_INVALID_WEBHOOK_EVENT', /event such as order.created/],
   ] as const) {
     let calls = 0
     t.mock.method(globalThis, 'fetch', async () => {

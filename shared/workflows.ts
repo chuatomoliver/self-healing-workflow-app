@@ -16,6 +16,7 @@ export type PlanMapping = { source: string; target: string }
 export type PlanSetting = { label: string; value: string; needsInput?: boolean }
 export type PlanStepConfiguration = {
   reviewed?: boolean
+  configuredBy?: 'muse'
   operation: string
   webhookTemplateId?: string
   inputs: PlanField[]
@@ -26,6 +27,8 @@ export type PlanStepConfiguration = {
 export type PlanStep = PlanStepConfiguration & { id: string; title: string; role: DiagramNodeRole; description: string }
 export type PlanWebhookTemplate = {
   suggestedBy?: 'muse'
+  configuredBy?: 'muse'
+  connectionId?: string
   setup?: { endpointReviewed: boolean; authenticationReviewed: boolean; payloadReviewed: boolean }
   id: string
   name: string
@@ -39,9 +42,10 @@ export type PlanWebhookTemplate = {
   payloadTemplate: Record<string, string>
 }
 export type PlanQuestion = { id: string; stepId: string; question: string; explanation: string; answer?: string }
-export type PlanCheck = { id: string; title: string; description: string; status: 'pending' | 'needs-input' | 'not-run' | 'reviewed' }
+export type PlanCheck = { id: string; title: string; description: string; status: 'pending' | 'needs-input' | 'not-run' | 'reviewed' | 'configured' }
 export type WorkflowPlan = {
   generatedBy?: 'muse'
+  configurationMode?: 'automatic'
   structureReviewed?: boolean
   id: string
   sourceDiagramId: string

@@ -31,7 +31,7 @@ function validateEdges(edges: DiagramEdge[], nodes: Set<string>, label: string) 
   if (queue.length !== nodes.size) invalid(`${label} contains a cycle. Drafts currently support acyclic workflows.`)
 }
 
-export function validateDraft(draft: WorkflowDraft) {
+export function validateDraft(draft: WorkflowDraft, localReceiverUrl?: string) {
   const { diagram, plan } = draft
   const nodes = unique(diagram.nodes, 'Diagram nodes')
   const steps = unique(plan.steps, 'Plan steps')
@@ -46,7 +46,7 @@ export function validateDraft(draft: WorkflowDraft) {
     const webhook = plan.webhooks.find((item) => item.id === step.webhookTemplateId)
     if (webhook && step.role !== (webhook.direction === 'incoming' ? 'trigger' : 'action')) invalid('Incoming webhooks require trigger steps and outgoing webhooks require action steps.')
     if (step.reviewed && stepSetupIssues(step).length) invalid('Resolve missing step configuration before marking it reviewed.')
-    if (webhook?.setup?.payloadReviewed && webhookMappingsIssue(step, webhook)) invalid('The step mappings must match the reviewed webhook payload.')
+    if ((webhook?.setup?.payloadReviewed || webhook?.configuredBy) && webhookMappingsIssue(step, webhook!)) invalid('The step mappings must match the configured webhook payload.')
   }
   for (const question of plan.questions) if (!steps.has(question.stepId)) invalid('Questions must reference existing steps.')
   validateEdges(diagram.edges, nodes, 'Diagram')
@@ -57,7 +57,8 @@ export function validateDraft(draft: WorkflowDraft) {
   for (const webhook of plan.webhooks) {
     let url: URL
     try { url = new URL(webhook.endpoint.urlTemplate) } catch { invalid('Webhook endpoint templates must be valid HTTPS URLs.') }
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    const localReceiver = localReceiverUrl && url.href === localReceiverUrl && url.protocol === 'http:' && url.hostname === '127.0.0.1'
+    if ((!localReceiver && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) {
       invalid('Webhook templates require HTTPS without embedded credentials, query strings, or fragments.')
     }
     if (webhook.suggestedBy === 'muse') {
@@ -75,5 +76,6 @@ export function validateDraft(draft: WorkflowDraft) {
     if (webhook.setup?.endpointReviewed && webhookEndpointIssue(webhook)) invalid('Resolve the webhook endpoint before marking it reviewed.')
     if (webhook.setup?.authenticationReviewed && webhookAuthenticationIssue(webhook)) invalid('Resolve the authentication reference before marking it reviewed.')
     if (webhook.setup?.payloadReviewed && webhookPayloadIssue(webhook)) invalid('Resolve the payload fields before marking them reviewed.')
+    if (webhook.configuredBy && (!webhook.connectionId || webhookEndpointIssue(webhook) || webhookAuthenticationIssue(webhook) || webhookPayloadIssue(webhook))) invalid('Machine-configured webhooks require a valid saved connection and payload.')
   }
 }

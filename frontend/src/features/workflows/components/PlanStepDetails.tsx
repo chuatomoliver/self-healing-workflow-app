@@ -4,6 +4,7 @@ import { Icon } from '../../../components/ui/Icon'
 import { NodeRoleBadge } from '../../diagram-parsing/components/NodeRoleBadge'
 import type { PlanStep, PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../types'
 import { WebhookStatus } from './WebhookStatus'
+import { stepSetupIssues } from '../../../../../shared/setup.ts'
 
 type PlanStepDetailsProps = {
   step: PlanStep
@@ -11,9 +12,11 @@ type PlanStepDetailsProps = {
   containerRef: RefObject<HTMLElement | null>
   webhookConnections: WebhookConnectionState
   onReviewWebhook: (template: PlanWebhookTemplate) => void
+  onEdit?: () => void
+  editingDisabled?: boolean
 }
 
-export function PlanStepDetails({ step, plan, containerRef, webhookConnections, onReviewWebhook }: PlanStepDetailsProps) {
+export function PlanStepDetails({ step, plan, containerRef, webhookConnections, onReviewWebhook, onEdit, editingDisabled }: PlanStepDetailsProps) {
   const webhook = plan.webhooks.find((item) => item.id === step.webhookTemplateId)
   const outgoingEdges = plan.edges.filter((edge) => edge.source === step.id)
 
@@ -79,5 +82,6 @@ export function PlanStepDetails({ step, plan, containerRef, webhookConnections, 
         </li>)}
       </ul>
     </div>}
+    {onEdit && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><span className="text-[10px] text-muted">{step.reviewed ? 'Setup reviewed' : step.configuredBy === 'muse' ? stepSetupIssues(step).length ? 'Muse needs more information' : 'Configured by Muse' : 'Needs review'}</span><Button variant="text" size="inline" disabled={editingDisabled} onClick={onEdit}>Edit {step.title} setup<Icon name="arrow" width="12" height="12" /></Button></div>}
   </section>
 }

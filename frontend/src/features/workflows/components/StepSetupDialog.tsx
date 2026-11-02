@@ -9,7 +9,7 @@ export function StepSetupDialog({ step, onApply, onClose }: { step: PlanStep; on
   const [value, setValue] = useState<PlanStep>(() => structuredClone(step))
   const [error, setError] = useState('')
   const issues = stepSetupIssues(value)
-  const update = (patch: Partial<PlanStep>) => { setValue((current) => ({ ...current, ...patch, reviewed: false })); setError('') }
+  const update = (patch: Partial<PlanStep>) => { setValue((current) => ({ ...current, ...patch, reviewed: false, configuredBy: undefined })); setError('') }
   return <Dialog open title={`Set up ${step.title}`} onClose={onClose}>
     <form onSubmit={(event) => {
       event.preventDefault()

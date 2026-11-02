@@ -43,7 +43,7 @@ jobs:
         working-directory: backend
         env:
           TEST_DATABASE_URL: mysql://root@127.0.0.1:${{ job.services.mysql.ports[3306] }}/metaflow_test
-        run: node --test tests/database.test.ts
+        run: node --test --test-concurrency=1 tests/database.test.ts tests/webhook-database.test.ts tests/execution-database.test.ts
       - run: npm run lint
         working-directory: frontend
       - run: npm test

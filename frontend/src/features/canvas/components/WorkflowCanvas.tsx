@@ -19,7 +19,7 @@ function CanvasNodeCard({ data, selected }: NodeProps<CanvasNode>) {
     <div className="flex items-center justify-between gap-2"><NodeRoleBadge role={data.step.role} /><span className="text-[9px] text-slate-400">{data.step.id.toUpperCase()}</span></div>
     <p className="mt-3 text-xs leading-relaxed font-semibold wrap-anywhere">{data.step.title}</p>
     <p className="mt-1 text-[10px] leading-relaxed text-muted">{data.step.operation}</p>
-    {data.step.webhookTemplateId && <p className="mt-2 text-[9px] text-amber-700">Webhook configuration · not tested</p>}
+    {data.step.webhookTemplateId && <p className="mt-2 text-[9px] text-muted">Webhook configuration</p>}
     <p className={`mt-3 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[9px] font-medium ${state.colors}`}>
       <span className={`size-1.5 shrink-0 rounded-full bg-current ${data.status === 'running' ? 'motion-safe:animate-pulse' : ''}`} />{state.label}
     </p>
