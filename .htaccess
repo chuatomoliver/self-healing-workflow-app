@@ -1,0 +1,3 @@
+# This directory contains application source, not an Apache document root.
+# Run the frontend through Vite and the backend through Node during development.
+Require all denied

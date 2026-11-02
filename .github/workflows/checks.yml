@@ -1,0 +1,52 @@
+name: Application checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # Disposable CI database only; application secrets are never used here.
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: metaflow_test
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run check
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+      - name: MySQL integration
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: mysql://root@127.0.0.1:${{ job.services.mysql.ports[3306] }}/metaflow_test
+        run: node --test tests/database.test.ts
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

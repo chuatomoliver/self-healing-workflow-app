@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { prepareIngestionDraft, validateDiagram } from '../validation'
 
-export function useIngestionDraft() {
-  const [prompt, setPrompt] = useState('')
+export function useIngestionDraft(initialPrompt = '') {
+  const [prompt, setPrompt] = useState(initialPrompt)
   const [attachment, setAttachment] = useState<{ file: File; previewUrl: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)

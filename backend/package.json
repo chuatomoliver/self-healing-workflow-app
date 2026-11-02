@@ -1,0 +1,21 @@
+{
+  "name": "metaflow-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "start": "node src/server.ts",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "test:integration": "node scripts/test-integration.ts",
+    "muse:test": "node scripts/test-muse.ts",
+    "muse:test:prompt": "node scripts/test-muse.ts --prompt",
+    "muse:setup": "node scripts/test-muse.ts --save",
+    "muse:forget": "node scripts/test-muse.ts --forget",
+    "db:migrate": "node src/migrate.ts"
+  },
+  "dependencies": { "fastify": "^5.12.7", "mysql2": "^3.24.6" },
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "~7.0.2" }
+}
