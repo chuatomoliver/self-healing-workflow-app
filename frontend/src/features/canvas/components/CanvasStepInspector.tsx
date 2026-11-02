@@ -43,11 +43,11 @@ export function CanvasStepInspector({ step, state, webhook, connections, output,
     <p className="mt-4 text-[11px] leading-relaxed text-muted">{step.description}</p>
     <div className="mt-4 rounded-lg bg-slate-50 p-3"><p className="text-[9px] font-medium tracking-wide text-muted">OPERATION</p><p className="mt-1 text-xs leading-relaxed font-medium">{step.operation}</p></div>
     {webhook && <div className="mt-4 rounded-lg border border-line p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-medium">{webhook.name}</p><WebhookStatus state={connections[webhook.id]} /></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-medium">{webhook.name}</p><WebhookStatus template={webhook} state={connections[webhook.id]} /></div>
       <p className="mt-2 text-[10px] leading-relaxed text-muted">{webhook.direction === 'incoming' ? 'Incoming' : 'Outgoing'} · {webhook.method} · <code className="wrap-anywhere">{webhook.event}</code></p>
       <Button variant="text" size="inline" className="mt-2" onClick={() => onReviewWebhook(webhook)}>View webhook template<Icon name="arrow" width="12" height="12" /></Button>
     </div>}
-    {step.configuration.some((setting) => setting.needsInput) && <p className="mt-4 rounded-md bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-800">Urgency rule required.</p>}
+    {step.configuration.some((setting) => setting.needsInput) && <p className="mt-4 rounded-md bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-800">Needs input: {step.configuration.filter((setting) => setting.needsInput).map((setting) => setting.label).join(', ')}.</p>}
     {step.mappings.length > 0 && <details className="mt-4 border-t border-line pt-3">
       <summary className="cursor-pointer text-[11px] font-medium">Field mappings · {step.mappings.length}</summary>
       <ul className="mt-3 grid gap-2">{step.mappings.map((mapping) => <li key={`${mapping.source}-${mapping.target}`} className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-[10px] leading-relaxed"><code className="wrap-anywhere text-muted">{mapping.source}</code><Icon name="arrow" width="12" height="12" className="text-slate-400" /><code className="wrap-anywhere">{mapping.target}</code></li>)}</ul>

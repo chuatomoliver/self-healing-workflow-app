@@ -34,7 +34,7 @@ export function prepareIngestionDraft(prompt: string, diagram: File | null): Dra
   }
   return {
     ok: true,
-    draft: { prompt: trimmedPrompt, diagram, nextStep: diagram ? 'parse-diagram' : 'review-plan' },
+    draft: { prompt: trimmedPrompt, diagram, nextStep: 'parse-diagram' },
   }
 }
 

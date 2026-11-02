@@ -16,9 +16,10 @@ type ParseDiagramPageProps = {
   sourceUrl: string | null
   prompt: string
   onContinue: () => void
+  isSample: boolean
 }
 
-export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onContinue }: ParseDiagramPageProps) {
+export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onContinue, isSample }: ParseDiagramPageProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(result.nodes[0]?.id ?? null)
   const selectedNode = result.nodes.find((node) => node.id === selectedNodeId) ?? result.nodes[0]
   const reviewNodes = result.nodes.filter((node) => node.reviewNote)
@@ -34,7 +35,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           Review the diagram structure.
         </h1>
         <p className="max-w-2xl text-xs leading-[1.8] text-muted md:text-[13px]">
-          Review the extracted steps and connections.
+          {isSample ? 'This is a sample workflow. Submit a description or diagram to parse your own.' : result.id.startsWith('parsed-') ? 'Review the steps and connections extracted by Muse. Check any points marked for review.' : 'Review the saved steps and connections. Check any points marked for review.'}
         </p>
       </header>
 
@@ -45,7 +46,7 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
             <div className="min-w-0">
               <p className="text-[9px] tracking-wide text-muted">{sourceFile ? 'SELECTED DIAGRAM' : 'WORKFLOW'}</p>
               <p className="mt-1 text-xs font-medium break-all">{sourceFile?.name ?? result.title}</p>
-              {sourceFile && <p className="mt-1 text-[10px] text-muted">{formatFileSize(sourceFile.size)} · Kept locally</p>}
+              {sourceFile && <p className="mt-1 text-[10px] text-muted">{formatFileSize(sourceFile.size)} · Submitted for parsing</p>}
             </div>
           </div>
           <div className="flex items-center gap-4 text-[11px]">
@@ -69,8 +70,10 @@ export function ParseDiagramPage({ result, sourceFile, sourceUrl, prompt, onCont
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 id="structure-heading" className="text-sm font-semibold">Suggested structure</h2>
+              <span className="rounded-md bg-accent-soft px-2 py-1 text-[10px] text-accent">{isSample ? 'Sample workflow' : result.id.startsWith('parsed-') ? 'Muse Spark 1.3' : 'Saved workflow'}</span>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">{result.title} · {result.nodes.length} nodes · {result.edges.length} edges</p>
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted">{result.summary}</p>
           </div>
           {reviewNodes.length > 0 && <button type="button" onClick={() => setSelectedNodeId(reviewNodes[0].id)}
             className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-[10px] font-medium text-amber-800 transition-colors duration-200 hover:bg-amber-100 motion-reduce:transition-none">

@@ -47,6 +47,7 @@ use Vite for the frontend rather than serving the source directory through XAMPP
 | Method | Path | Request | Response |
 | --- | --- | --- | --- |
 | GET | `/api/health` | none | `{ "status": "ok" }`, or 503 if database access fails |
+| POST | `/api/parse` | `{ prompt, attachment? }` | `{ draft: WorkflowDraft, model: "muse-spark-1.3" }`; does not save automatically |
 | GET | `/api/workflows` | none | `{ "workflows": [...] }`, latest 50 draft summaries |
 | POST | `/api/workflows` | `WorkflowDraft` | 201, `{ "workflow": SavedWorkflow }` and Location header |
 | GET | `/api/workflows/:id` | UUID path parameter | `{ "workflow": SavedWorkflow }` |
@@ -65,7 +66,7 @@ fails after a save, refresh the saved-draft list before trying another creation.
 Errors have the shape `{ error: { code, message, requestId } }`. Validation errors
 return 400, missing workflows return 404, oversized requests return 413, and
 database failures return 503. Unknown fields are rejected rather than stripped;
-JSON types are never coerced. Limits include 512 KB per request, 100 diagram
+JSON types are never coerced. Saved-draft limits include 512 KB per request, 100 diagram
 nodes/plan steps, 200 edges, 200-character titles, and 4,000-character descriptions.
 IDs must be unique within each collection, edges and questions must reference
 existing nodes, and the plan must match its source diagram. Cycles are rejected.
@@ -87,8 +88,71 @@ bytes, canvas layout/name overrides, webhook demo connection states, execution
 history, and repair review state are not persisted in this milestone. Applied
 repair changes to the plan can be saved from the Plan Workflow screen.
 
-Diagram interpretation, workflow planning, and execution still use demo data.
-The app UI makes no Muse API requests; its database features need no Muse key.
+Descriptions and diagrams submitted with Continue are parsed by Muse through
+`POST /api/parse`. Direct navigation before submission still offers the labeled
+sample. Parsed graphs carry into an initial draft plan; detailed operation setup,
+live execution, webhook delivery, and AI repair remain pending. Database features
+need no Muse key. Sample execution is disabled for parsed workflows.
+
+## Muse parsing endpoint
+
+`POST /api/parse` accepts a required `prompt` string (up to 4,000 characters;
+may be empty when a diagram is supplied) and an optional `attachment`:
+
+```json
+{
+  "prompt": "When a Shopify order arrives, create a deal and notify sales.",
+  "attachment": {
+    "name": "workflow.png",
+    "mimeType": "image/png",
+    "data": "BASE64_FILE_BYTES"
+  }
+}
+```
+
+Omit `attachment` for text-only parsing. Supported file types are PNG, JPEG, and
+PDF, up to 10 MB decoded. The route has a 14 MB JSON-body limit for base64 overhead;
+saved-draft routes retain their 512 KB limit. The server rejects unknown fields,
+malformed base64, extension/type mismatches, and invalid file signatures before
+calling Muse. These checks do not fully decode/render files; Meta may still reject
+a corrupt file. User-supplied remote URLs are not accepted.
+
+The parser loads `MODEL_API_KEY` first, then the saved Windows credential. It sends
+one request to Meta's Responses API using `muse-spark-1.3`, inline image/PDF data,
+`store: false`, strict `text.format` JSON Schema, and at most 8,192 output tokens.
+There are no automatic retries. Calls time out after 90 seconds, and client
+disconnects cancel the upstream request when detected. Only one parse runs at a
+time per server process. API usage charges may still apply after cancellation.
+
+The model returns title, summary, nodes, edges, review notes, and up to 10 webhook
+suggestions in the same request. Each suggestion links to exactly one step and
+includes its direction, event, purpose, reason, and up to 20 proposed payload fields.
+Incoming suggestions require trigger steps; outgoing suggestions require action
+steps. An ordinary native API/OAuth action is not automatically a webhook.
+
+The server
+validates the shape and graph, assigns document IDs and layout positions, and
+builds a matching plan. Suggested webhooks carry `suggestedBy: "muse"`; their URLs
+are generated under `.invalid`, and authentication contains only placeholder header
+names and credential references. Payload values are dotted field references, never
+literal credentials or executable expressions. Linked steps receive proposed field
+mappings and webhook setup marked as required. Duplicate suggestion IDs, duplicate
+step links or payload fields, unknown steps, and incompatible roles are rejected.
+Suggestions can be saved and reopened with the draft. The UI keeps them at Needs
+setup and does not allow its sample Connect action to register them or mark them
+connected. Endpoint, provider authentication, receiver schemas, and payload mappings
+still require review and future live connector setup. No suggestion URL is fetched.
+
+This is extraction plus a draft scaffold, not
+detailed AI planning or executable configuration. No database write occurs until
+the user saves. A successful new parse resets prior demo state and session history.
+
+Errors include `MUSE_NOT_CONFIGURED` (503), key/access or billing failures (503),
+`PARSE_BUSY`/`MUSE_RATE_LIMITED` (429), invalid or rejected AI results (502),
+`NO_WORKFLOW_FOUND` (422), and `MUSE_TIMEOUT` (504). Provider bodies, credentials,
+and raw exceptions are never returned or logged. Parse failures never return the
+sample workflow. See [Meta structured output](https://dev.meta.ai/docs/structured-output)
+and [inline file handling](https://dev.meta.ai/docs/file-handling).
 
 ## Save your Muse API key once
 
@@ -131,8 +195,11 @@ and a 1,024 output-token limit. API usage charges may apply. Success prints
 
 This standalone test needs Node.js 24 but no running API server or MySQL database.
 It never sends workflow content or displays the key, raw model output, or provider
-error bodies. The server-side credential loader can be reused by the future Muse
-integration; this setup does not connect the Parse or Plan screens to Muse yet.
+error bodies. The parsing endpoint uses the same saved credential loader, so it
+does not require repeated key entry after successful setup. To verify a real parse
+without starting MySQL or an HTTP listener, run `npm.cmd run muse:test:parse`.
+This makes one real request through the parse handler with a fixed example, checks
+the resulting draft, and reports only node/edge/suggestion counts. It does not test user uploads.
 See the [Meta API quickstart](https://dev.meta.ai/docs/quickstart).
 
 The optional Windows storage check uses only a generated test credential under a
@@ -158,6 +225,8 @@ Remove-Item Env:RUN_WINDOWS_CREDENTIAL_TESTS
   are not logged. API failures do not return internal exceptions.
 - User descriptions and plan content are application data stored in MySQL.
   Do not paste API keys or passwords into workflow content.
+- Parsing transmits the submitted description and optional diagram bytes to Meta.
+  Original file bytes are held transiently for the request and are not saved by the app.
 
 ## Verification
 
@@ -168,7 +237,7 @@ npm.cmd run test:integration
 ```
 
 `npm test` runs request validation, graph consistency, origin restrictions,
-configuration, sanitized-error checks, mocked Muse API requests, and saved-key
+configuration, parse input/output and graph checks, mocked Muse API requests, and saved-key
 selection/setup/removal behavior. It makes no live Meta requests. The real MySQL
 and Windows Credential Manager tests are skipped unless explicitly enabled;
 `npm run test:integration` starts a separate password-protected database on a random

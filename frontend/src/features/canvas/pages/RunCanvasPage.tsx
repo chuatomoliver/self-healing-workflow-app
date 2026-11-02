@@ -4,6 +4,7 @@ import { workflowRoutes } from '../../../app/navigation'
 import { Button } from '../../../components/ui/Button'
 import { Icon } from '../../../components/ui/Icon'
 import { WebhookTemplateDialog } from '../../workflows/components/WebhookTemplateDialog'
+import { canConnectWebhookDemo, webhookReviewState } from '../../workflows/webhookReview'
 import type { PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../../workflows/types'
 import { CanvasStepInspector } from '../components/CanvasStepInspector'
 import { DemoExecutionLog } from '../components/DemoExecutionLog'
@@ -21,6 +22,7 @@ type RunCanvasPageProps = {
   hasRepairReview: boolean
   onReviewRepair: () => void
   onViewLogs: () => void
+  allowSamplePlayback: boolean
 }
 
 const runPresentation = {
@@ -30,7 +32,7 @@ const runPresentation = {
   stopped: { label: 'Stopped', colors: 'bg-amber-50 text-amber-800' },
 }
 
-export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook, run, hasRepairReview, onReviewRepair, onViewLogs }: RunCanvasPageProps) {
+export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhook, run, hasRepairReview, onReviewRepair, onViewLogs, allowSamplePlayback }: RunCanvasPageProps) {
   const scenarios = getSampleScenarios(plan)
   const [selectedStepId, setSelectedStepId] = useState(plan.steps[0]?.id ?? '')
   const [scenarioId, setScenarioId] = useState(scenarios[0].id)
@@ -39,7 +41,7 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
   const inspectorRef = useRef<HTMLElement>(null)
   const selectedStep = draft.steps.find((step) => step.id === selectedStepId) ?? draft.steps[0]
   const scenario = scenarios.find((item) => item.id === scenarioId) ?? scenarios[0]
-  const connectedCount = plan.webhooks.filter((webhook) => webhookConnections[webhook.id] === 'connected-demo').length
+  const connectedCount = plan.webhooks.filter((webhook) => webhookReviewState(webhook, webhookConnections[webhook.id]) === 'connected-demo').length
   const presentation = run.frame ? runPresentation[run.frame.status] : { label: 'Ready', colors: 'bg-slate-100 text-muted' }
 
   function inspectFailure(stepId: string) {
@@ -48,8 +50,9 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
   }
 
   function connectWebhook(templateId: string) {
-    onConnectWebhook(templateId)
     const template = plan.webhooks.find((item) => item.id === templateId)
+    if (!template || !canConnectWebhookDemo(template)) return
+    onConnectWebhook(templateId)
     setConnectionMessage(`${template?.name ?? 'Webhook'} connected.`)
   }
 
@@ -68,17 +71,18 @@ export function RunCanvasPage({ plan, draft, webhookConnections, onConnectWebhoo
       </div>
       <div className="mt-5 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-slate-50/70 p-3.5">
         <div className="min-w-0 flex-1 basis-56"><label htmlFor="canvas-demo-input" className="text-[10px] font-semibold">Run input</label>
-          <select id="canvas-demo-input" value={scenarioId} disabled={run.running} onChange={(event) => setScenarioId(event.target.value)}
+          <select id="canvas-demo-input" value={allowSamplePlayback ? scenarioId : ''} disabled={run.running || !allowSamplePlayback} onChange={(event) => setScenarioId(event.target.value)}
             className="mt-2 w-full min-w-0 rounded-md border border-line bg-surface px-3 py-2.5 text-[11px] outline-none focus:border-accent focus:ring-3 focus:ring-accent/10 disabled:opacity-60">
-            {scenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            {allowSamplePlayback ? scenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>) : <option value="">Execution is not available for this workflow yet</option>}
           </select>
         </div>
         <div className="flex flex-wrap gap-2">
           {run.running ? <Button variant="secondary" onClick={run.stop}><Icon name="stop" width="14" height="14" />Stop</Button>
-            : <Button onClick={() => run.start(scenario)} disabled={draft.steps.length === 0}><Icon name="play" width="15" height="15" />{run.frame ? 'Run again' : 'Run workflow'}</Button>}
+            : <Button onClick={() => { if (allowSamplePlayback) run.start(scenario) }} disabled={draft.steps.length === 0 || !allowSamplePlayback}><Icon name="play" width="15" height="15" />{run.frame ? 'Run again' : 'Run workflow'}</Button>}
           <Button variant="secondary" disabled={run.running} onClick={draft.resetLayout}><Icon name="reset" width="14" height="14" />Reset layout</Button>
         </div>
       </div>
+      {!allowSamplePlayback && <p className="mt-3 text-xs leading-relaxed text-muted">You can arrange and review this workflow. Live execution will be available after operation setup and execution integration.</p>}
       <div className="mt-4">
         <WorkflowCanvas steps={draft.steps} paths={plan.edges} positions={draft.positions} states={run.frame?.stepStates ?? {}}
           webhookConnections={webhookConnections} selectedStepId={selectedStep?.id ?? null} running={run.running}

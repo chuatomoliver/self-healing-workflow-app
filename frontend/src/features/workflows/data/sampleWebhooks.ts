@@ -1,7 +1,7 @@
 import type { PlanWebhookTemplate } from '../types'
 
 // Illustrative custom webhook contracts, not vendor-specific API definitions.
-// MUSE can later suggest templates in this shape through the validated REST response.
+// Real Muse suggestions use this shape with suggestedBy: 'muse' and require setup.
 export const sampleWebhooks: PlanWebhookTemplate[] = [
   {
     id: 'support-intake', name: 'Support intake', direction: 'incoming', method: 'POST',

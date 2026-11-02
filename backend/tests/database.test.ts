@@ -7,6 +7,7 @@ import { buildApp } from '../src/app.ts'
 import { createPool, migrate } from '../src/database.ts'
 import { mysqlWorkflows } from '../src/workflows/repository.ts'
 import { draftFixture } from './fixtures.ts'
+import { draftFromExtraction } from '../src/muse/draft.ts'
 
 test('real MySQL: migrations, restart persistence, version history, rollback, and concurrent saves', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
   const config = { databaseUrl: process.env.TEST_DATABASE_URL!, databaseSsl: false }
@@ -67,4 +68,29 @@ test('real MySQL: migrations, restart persistence, version history, rollback, an
   finally { await reopenedPool.execute('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksums[0].checksum, checksums[0].name]) }
   await migrate(reopenedPool)
   assert.equal((await reopened.inject('/api/health')).statusCode, 200)
+})
+
+test('real MySQL: a parsed draft preserves extracted nodes, review notes, and pending configuration', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
+  const pool = createPool({ databaseUrl: process.env.TEST_DATABASE_URL!, databaseSsl: false })
+  t.after(() => pool.end())
+  await migrate(pool)
+  const source = draftFixture().diagram
+  const draft = draftFromExtraction({
+    title: 'Extracted order flow', summary: 'A parsed draft.',
+    nodes: source.nodes.map((node) => ({ ...node, app: 'Example app', reviewNote: 'Confirm the configuration.' })),
+    edges: source.edges.map((edge) => ({ ...edge, label: edge.label ?? '' })),
+    webhooks: [{
+      id: 'parsed-notification', stepId: 'send', name: 'Notification receiver', direction: 'outgoing', event: 'order.received',
+      purpose: 'Notify the receiver.', suggestionReason: 'The notification action needs an HTTP delivery.',
+      payloadFields: [{ name: 'order_id', source: 'order.id', description: 'Order identifier.' }],
+    }],
+  }, 'When an order arrives, notify sales.')
+  const app = buildApp({ repository: mysqlWorkflows(pool) })
+  t.after(() => app.close())
+  const created = await app.inject({ method: 'POST', url: '/api/workflows', payload: draft })
+  assert.equal(created.statusCode, 201)
+  const first = created.json().workflow
+  assert.deepEqual((await app.inject(`/api/workflows/${first.id}`)).json().workflow.diagram, draft.diagram)
+  assert.deepEqual((await app.inject(`/api/workflows/${first.id}`)).json().workflow.plan, draft.plan)
+  assert.equal((await app.inject(`/api/workflows/${first.id}`)).json().workflow.plan.webhooks[0].suggestedBy, 'muse')
 })

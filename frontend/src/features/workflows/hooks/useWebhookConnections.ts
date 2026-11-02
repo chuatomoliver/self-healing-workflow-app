@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PlanWebhookTemplate, WebhookConnectionState } from '../types'
+import { canConnectWebhookDemo } from '../webhookReview'
 
 export function useWebhookConnections(templates: PlanWebhookTemplate[]) {
   const [connections, setConnections] = useState<WebhookConnectionState>({})
@@ -7,7 +8,7 @@ export function useWebhookConnections(templates: PlanWebhookTemplate[]) {
   // UI-only adapter. Replace with a backend-confirmed result during REST integration.
   // It does not register a webhook, send its payload, or resolve secret references.
   function connect(templateId: string) {
-    if (!templates.some((template) => template.id === templateId)) return
+    if (!templates.some((template) => template.id === templateId && canConnectWebhookDemo(template))) return
     setConnections((current) => ({ ...current, [templateId]: 'connected-demo' }))
   }
 
