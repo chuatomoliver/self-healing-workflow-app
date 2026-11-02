@@ -7,11 +7,16 @@ React + TypeScript with Vite and Tailwind CSS.
 Use Node.js 24 and npm. Run these commands from this directory:
 
 ```powershell
-npm ci
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
-Vite prints the local development URL after starting.
+Vite serves `http://127.0.0.1:5173` and proxies `/api` to the backend at port `3001`.
+Use `npm.cmd` in Windows PowerShell to avoid script execution-policy errors;
+on other systems, use `npm`. Start and configure the Fastify + MySQL backend as
+described in the [main README](../README.md#run-locally) to save or reopen drafts.
+The UI still uses sample data for parsing, planning, execution, and repair. The
+standalone Muse key setup/test tools do not enable AI requests from these pages.
 
 ## Scripts
 
@@ -65,7 +70,9 @@ diagram parsing from text-only planning for later integration, but it does not
 control preview navigation. React Router connects the two pages, including browser
 Back/Forward and sidebar navigation. The draft and its object URL are owned above
 the page routes, so the file and description survive navigation between pages.
-Nothing is persisted across a page reload. Client validation is a usability check;
+Unsaved descriptions and uploaded files are not persisted across a page reload.
+Descriptions explicitly saved from Plan Workflow can be restored with the saved
+draft, but the original uploaded file bytes cannot. Client validation is a usability check;
 the future backend must validate file content, size, and request data independently.
 
 ## Parse Diagram
@@ -80,11 +87,11 @@ review notes all render from that model. Node selection works from the graph or
 the list, including the graph's keyboard selection, and updates the detail panel.
 The graph supports pan, zoom, and fit-to-view; it is not an editable workflow yet.
 
-Muse integration will replace the sample with validated results from Laravel's
-REST API. The final API schema will be defined during integration; the current
-view model includes display positions for the example graph. Confirm & continue
-opens the static Plan Workflow page at `/plan-workflow`; this does not save or
-approve a workflow on a server.
+Muse integration will replace the sample with validated results from the Fastify
+backend. Shared draft transport types already live in `../shared/workflows.ts`;
+the AI response endpoints remain to be implemented. The current view model
+includes graph display positions. Confirm & continue opens Plan Workflow at
+`/plan-workflow`; navigation alone does not save or approve a workflow on the server.
 
 ## Plan Workflow
 
@@ -95,8 +102,9 @@ prompt and selected file remain available while moving between pages.
 `features/workflows/data/samplePlan.ts` enriches the example diagram's stable
 node IDs and edges with proposed operations, configuration, inputs/outputs,
 mappings, webhook suggestions, open questions, and sample review states. The
-components receive a typed frontend view model; this JSON is not an executable
-workflow-engine definition or a finalized REST API response schema.
+components receive a typed view model whose diagram and plan types are shared
+with the backend draft transport. It is not an executable workflow-engine
+definition; AI-specific response contracts remain to be implemented.
 
 Selecting a proposed step updates its detail panel. Inspect related step links
 an open question to that panel. The unresolved urgency rule is carried over from
@@ -128,9 +136,14 @@ Do not infer real endpoint URLs or credentials from AI-generated text. Mark a
 connection live only after the backend confirms setup. Live webhook setup and
 execution checks remain pending even after all demo templates are connected.
 
-The structured JSON section is collapsible. Build on canvas opens
-`/run-on-canvas`. No Muse calls, backend changes, database writes, or live workflow
-execution are included in this feature.
+The structured JSON section is collapsible. Build on canvas opens `/run-on-canvas`.
+The Workflow draft section supports renaming, saving, listing, and reopening drafts
+through the Fastify API. Save draft persists `{ prompt, diagram, plan }` to MySQL
+and adds `?workflow=UUID` to the URL so a refresh can reload it. Updates use the last
+saved version and show a conflict if another tab saved first. Opening a saved draft
+resets demo playback and session history. Uploaded file bytes, canvas overrides,
+webhook connection states, and history are not saved. Applied repair changes to
+the plan can be saved here. No Muse calls or live workflow execution are performed.
 
 ## Run on Canvas
 

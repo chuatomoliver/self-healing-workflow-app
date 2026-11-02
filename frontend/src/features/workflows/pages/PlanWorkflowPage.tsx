@@ -9,6 +9,7 @@ import { PlanWebhooks } from '../components/PlanWebhooks'
 import { WebhookTemplateDialog } from '../components/WebhookTemplateDialog'
 import { PlanChecks } from '../components/PlanChecks'
 import type { PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../types'
+import type { ReactNode } from 'react'
 
 type PlanWorkflowPageProps = {
   plan: WorkflowPlan
@@ -17,9 +18,10 @@ type PlanWorkflowPageProps = {
   webhookConnections: WebhookConnectionState
   onConnectWebhook: (templateId: string) => void
   onContinue: () => void
+  storage: ReactNode
 }
 
-export function PlanWorkflowPage({ plan, prompt, sourceFile, webhookConnections, onConnectWebhook, onContinue }: PlanWorkflowPageProps) {
+export function PlanWorkflowPage({ plan, prompt, sourceFile, webhookConnections, onConnectWebhook, onContinue, storage }: PlanWorkflowPageProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(plan.steps[0]?.id ?? null)
   const [reviewWebhook, setReviewWebhook] = useState<PlanWebhookTemplate | null>(null)
   const [announcement, setAnnouncement] = useState('')
@@ -54,6 +56,8 @@ export function PlanWorkflowPage({ plan, prompt, sourceFile, webhookConnections,
           Review steps and connect webhook templates before opening the canvas.
         </p>
       </header>
+
+      {storage}
 
       <section className="rounded-xl border border-line bg-surface p-5 xl:p-6" aria-labelledby="plan-summary-heading">
         <div className="flex flex-wrap items-start justify-between gap-4">
