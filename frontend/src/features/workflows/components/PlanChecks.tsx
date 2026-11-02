@@ -2,6 +2,7 @@ import { Icon } from '../../../components/ui/Icon'
 import type { PlanCheck } from '../types'
 
 const checkStates = {
+  reviewed: { label: 'Reviewed', color: 'bg-accent-soft text-accent' },
   pending: { label: 'Pending', color: 'bg-slate-100 text-muted' },
   'needs-input': { label: 'Needs input', color: 'bg-amber-50 text-amber-800' },
   'not-run': { label: 'Not run', color: 'bg-slate-100 text-muted' },

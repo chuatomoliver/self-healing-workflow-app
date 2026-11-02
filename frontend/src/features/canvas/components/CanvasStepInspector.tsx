@@ -34,10 +34,10 @@ export function CanvasStepInspector({ step, state, webhook, connections, output,
       setName(trimmed); setInvalid(false); setMessage('Name updated.')
     }}>
       <label htmlFor="canvas-step-name" className="text-[11px] font-medium">Display name</label>
-      <input id="canvas-step-name" value={name} maxLength={80} disabled={running} aria-invalid={invalid} aria-describedby="step-name-feedback"
+      <input id="canvas-step-name" value={name} maxLength={200} disabled={running} aria-invalid={invalid} aria-describedby="step-name-feedback"
         onChange={(event) => { setName(event.target.value); setMessage(''); setInvalid(false) }}
         className="mt-2 w-full min-w-0 rounded-md border border-line bg-surface px-3 py-2.5 text-xs outline-none focus:border-accent focus:ring-3 focus:ring-accent/10 disabled:bg-slate-50" />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[9px] text-muted">{name.length} / 80 characters</span><Button type="submit" variant="secondary" size="compact" disabled={running}>Apply name</Button></div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[9px] text-muted">{name.length} / 200 characters</span><Button type="submit" variant="secondary" size="compact" disabled={running}>Apply name</Button></div>
       <p id="step-name-feedback" role="status" className={`mt-2 text-[10px] leading-relaxed ${invalid ? 'text-danger' : 'text-muted'}`}>{message}</p>
     </form>
     <p className="mt-4 text-[11px] leading-relaxed text-muted">{step.description}</p>

@@ -1,275 +1,89 @@
-# Frontend
+# Metaflow frontend
 
-React + TypeScript with Vite and Tailwind CSS.
+React + TypeScript with Vite, Tailwind CSS, and React Flow. Active pages use the
+current parsed or saved workflow. They do not import a default sample plan,
+sample diagram, sample run, or sample repair contract.
 
 ## Development
 
-Use Node.js 24 and npm. Run these commands from this directory:
+Use Node.js 24. From this directory:
 
 ```powershell
 npm.cmd ci
 npm.cmd run dev
 ```
 
-Vite serves `http://127.0.0.1:5173` and proxies `/api` to the backend at port `3001`.
-Use `npm.cmd` in Windows PowerShell to avoid script execution-policy errors;
-on other systems, use `npm`. Start and configure the Fastify + MySQL backend as
-described in the [main README](../README.md#run-locally) to save or reopen drafts.
-Continue submits the description and optional diagram to the Fastify parsing
-endpoint, which calls Muse using the server-held key. Parsed graphs carry into a
-draft plan. Detailed AI planning, live execution, and AI repair are still pending;
-the labeled support example retains its existing sample behavior.
+Open `http://127.0.0.1:5173`. Vite proxies `/api` to the backend on port `3001`.
+Use `npm` instead of `npm.cmd` on macOS/Linux. See the [backend guide](../backend/README.md)
+for database and Muse key configuration.
 
-## Scripts
+## App flow
 
-- `npm run dev`: start the development server with hot module replacement.
-- `npm run lint`: check source files with Oxlint.
-- `npm test`: check input validation and demo branch, failure, and stop behavior using Node's test runner.
-- `npm run build`: check TypeScript and produce a production build in `dist/`.
-- `npm run preview`: serve the production build locally for review.
+| Page | Source and behavior |
+| --- | --- |
+| Describe or Upload | User description and optional PNG/JPG/PDF. No predefined template is inserted. |
+| Parse Diagram | Validated backend/Muse result, saved diagram, or an empty/loading/error state. |
+| Plan Workflow | Current draft, explicit detailed AI planning, editable setup, and saved-draft controls. |
+| Canvas | Current steps and connections with editable names and positions. No sample execution playback. |
+| Self-heal | Current workflow context and an honest empty state until real failure data is available. |
+| Context & logs | Actual session parsing, planning, configuration, save, and open actions. No invented execution records. |
 
-## Entry points
+Navigation to a page does not call Muse. AI requests are made only by explicit
+Continue or Generate detailed plan actions. Neither action retries automatically.
+Cancellation ignores an aborted result; a request already sent may still use credits.
 
-- `index.html`: browser entry document.
-- `src/main.tsx`: React application entry point.
-- `src/App.tsx`: application composition.
-- `src/layouts/AppLayout.tsx`: workflow sidebar and shared page shell.
-- `src/app/navigation.ts`: shared routes and workflow-stage navigation.
-- `src/features/ingestion/`: Describe or Upload page, form behavior, and validation.
-- `src/features/diagram-parsing/`: diagram review templates and example data.
-- `src/features/workflows/`: workflow-plan templates and example configuration.
-- `src/features/canvas/`: editable canvas, step inspector, and sample run playback.
-- `src/features/healing/`: failed-run context, repair review, verification, and local replay.
-- `src/features/history/`: session audit records, history filters, execution details, and workflow context.
-- `src/index.css`: Tailwind entry point, shared theme tokens, and minimal base styles.
+## Workflow setup
 
-## Styling
+Edit step setup allows changes to the name, operation, description, input/output
+fields, configuration settings, and source/target mappings. Missing settings remain
+marked Needs input until the user resolves them. A step can be marked reviewed
+only when its required setup is complete. IDs and graph roles are preserved.
 
-Use Tailwind utility classes for layout, responsive behavior, and component states.
-The official `@tailwindcss/vite` plugin compiles the styles through Vite. Shared
-colors, typography, and the short reveal animation are defined with `@theme` in
-`src/index.css`; no separate Tailwind configuration file is needed for this setup.
+Webhook Configure allows changes to its name, event, purpose, intended HTTPS
+address, authentication method/header/reference name, and payload field references.
+Actual secrets are not entered in the reference field. Endpoint, authentication,
+and payload review are recorded separately. Configuration never registers or tests
+a webhook and never marks it Connected.
 
-Reuse `components/ui/Button.tsx` for button variants and sizes, and
-`components/ui/Dialog.tsx` for native modal dialogs with keyboard dismissal and
-focus restoration. Keep class names
-complete and statically discoverable, including conditional variants. Transitions
-use `motion-reduce:transition-none`, and entrance animations use `motion-safe`, so
-they respect the user's reduced-motion preference. Add future page styles with
-utilities instead of a separate page stylesheet.
+Payload changes update the linked step's mappings. Changing mappings invalidates
+payload review; changing webhook settings invalidates affected step review.
+The plan's progress and checks are derived from current setup and question answers,
+not fixed example values. An answered question invalidates its related step's review.
 
-## Describe or Upload
+Apply to draft changes local state. Save draft stores the current plan, diagram,
+step settings, webhook review flags, question answers, names, and canvas positions
+through the backend. Original uploaded file bytes are not persisted.
 
-Accepts a description, a PNG/JPG/PDF diagram, or both. Descriptions are limited to
-4,000 characters and diagrams to 10 MB. Image thumbnails and file preview links
-use temporary object URLs, released on replacement, removal, or unmounting.
-Files stay local until Continue sends the description and optional file bytes
-through the backend to Meta for parsing. The form discloses that submission and
-API usage may apply. No API key is entered or stored in the browser.
+## Detailed planning with Muse
 
-Continue validates every draft (text, diagram, or both), submits `POST /api/parse`,
-and navigates to `/parse-diagram` with a loading/cancel state. Empty submissions
-stay on the first page with a validation error. Text-only descriptions also use
-Muse parsing. React Router connects the two pages, including browser
-Back/Forward and sidebar navigation. The draft and its object URL are owned above
-the page routes, so the file and description survive navigation between pages.
-Unsaved descriptions and uploaded files are not persisted across a page reload.
-Descriptions explicitly saved from Plan Workflow can be restored with the saved
-draft, but the original uploaded file bytes cannot. Client validation is a usability
-check; the backend also checks the request schema, file size, type, and signature.
+The separate Generate detailed plan button posts the current draft to `/api/plan`.
+The backend asks Muse for operations, fields, configuration, mappings, and questions
+for the same graph. Reviewed steps keep their setup. Existing webhook endpoints
+and authentication configuration are retained by the server and excluded from
+that AI context. Unknown business rules remain unresolved questions.
 
-## Parse Diagram
+Editing or leaving the plan page cancels an active planning request. Invalid
+results do not replace the draft. A successful result is still an unsaved draft
+until Save draft is used. Manual setup can also be completed without asking Muse
+for another plan.
 
-Open `/parse-diagram` directly or use the sidebar to inspect the sample without
-selecting a file. Before submission, the page shows a labeled support-request
-sample. After a successful submission, it shows the actual validated Muse result
-or a reopened saved graph, with extracted steps, connections, and review notes.
+## Execution, repair, and activity
 
-`features/diagram-parsing/api.ts` submits text and optional base64 file bytes with
-a cancellable timeout, translates known server errors, and never sends credentials.
-Only the backend calls Meta. It makes no automatic retries and does not fall back
-to a sample after a failed parse. Returning to another stage cancels an active
-parse; aborted results are not adopted. The prior workspace is replaced only by a
-successful result, resetting playback, repair, webhook state, and history.
+Live execution and AI repair are not implemented in this phase. Run workflow is
+disabled; no run, output, delivery status, or repair proposal is fabricated.
+The repair page shows the current workflow and setup counts, but sends no AI request
+without a genuine failed-run service.
 
-The React Flow graph, extracted-node list, extracted-edge list, counts, and
-review notes render from the returned graph. Node selection works from the graph or
-the list, including the graph's keyboard selection, and updates the detail panel.
-The graph supports pan, zoom, and fit-to-view; it is not an editable workflow yet.
+Context & logs lists actual app actions with timestamps, status, workflow name,
+and filters. This activity is session-only and resets on reload. It is distinct
+from future durable execution and repair history.
 
-Shared contracts live in `../shared/workflows.ts` and `../shared/parsing.ts`.
-The backend validates structured Muse output and supplies graph positions and
-a matching initial plan. Confirm & continue opens Plan Workflow at
-`/plan-workflow`; navigation alone does not save or approve a workflow on the server.
+## Build checks
 
-## Plan Workflow
+```powershell
+npm.cmd run lint
+npm.cmd run build
+```
 
-`/plan-workflow` reviews the parsed graph's draft, a saved draft, or the default
-support-request sample. It is reachable from
-Parse Diagram or the sidebar, and it can also be opened directly. The original
-prompt and selected file remain available while moving between pages.
-
-`features/workflows/data/samplePlan.ts` enriches the example diagram's stable
-node IDs and edges with proposed operations, configuration, inputs/outputs,
-mappings, webhook suggestions, open questions, and sample review states. The
-components receive a typed view model whose diagram and plan types are shared
-with the backend draft transport. It is not an executable workflow-engine
-definition. For parsed input, the backend derives a plan from the extracted nodes
-with operation setup marked as missing. Muse can suggest incoming/outgoing webhooks
-and proposed payload fields in the same parse request. Linked steps receive the
-suggested mappings; other operation mappings remain empty. Detailed AI planning
-and live connector setup remain to be implemented.
-
-Selecting a proposed step updates its detail panel. Inspect related step links
-an open question to that panel. The unresolved urgency rule is carried over from
-diagram review rather than filled with an invented business rule. Plan checks
-explicitly distinguish missing inputs, pending review/setup, and validation
-that has not run.
-
-`data/sampleWebhooks.ts` contains incoming support-intake and outgoing on-call /
-support-queue templates. Each typed template includes a stable ID, direction,
-event, method, endpoint placeholder, authentication reference, payload mappings,
-and a sample explanation of why MUSE might suggest it. Steps refer to templates
-through `webhookTemplateId`. These are illustrative custom contracts, not native
-Email, Slack, or Helpdesk API schemas; a real source or receiver may need an adapter.
-
-For the original sample workflow, Connect applies a template in local UI state immediately and updates its card,
-progress count, and linked step details to **Connected**. View template
-opens its endpoint / authentication / payload preview and also offers Connect.
-The shared `useWebhookConnections` hook owns this simulated operation above the
-routes, so it survives sidebar and Back/Forward navigation. Reloading resets it.
-It makes no network requests and does not register, test, or send webhook events.
-All example URLs use `.invalid`; secret references contain names, not credentials.
-The structured plan remains unchanged when local connection state changes.
-
-For REST integration, validate MUSE's suggestions on the backend, then replace
-the hook's demo operation with a backend-confirmed connection result. The backend
-must provision incoming URLs and configure source subscriptions where supported;
-outgoing hooks need the owner's configured receiver URL and server-held secrets.
-Do not infer real endpoint URLs or credentials from AI-generated text. Mark a
-connection live only after the backend confirms setup. Live webhook setup and
-execution checks remain pending even after all demo templates are connected.
-
-Muse-generated templates are labeled Suggested by Muse and Needs setup. Cards show
-the reason and related steps; Review setup opens the placeholder endpoint,
-authentication reference, proposed payload, and a setup checklist. These contracts
-are proposals, not verified vendor schemas. They never offer the sample Connect
-button and cannot inherit Connected status from a stale demo state. The provenance
-is saved with the draft. Reviewing, saving, and reopening suggestions make no new
-Muse request. Only a new explicit parsing submission uses the API.
-
-The structured JSON section is collapsible. Build on canvas opens `/run-on-canvas`.
-The Workflow draft section supports renaming, saving, listing, and reopening drafts
-through the Fastify API. Save draft persists `{ prompt, diagram, plan }` to MySQL
-and adds `?workflow=UUID` to the URL so a refresh can reload it. Updates use the last
-saved version and show a conflict if another tab saved first. Opening a saved draft
-resets demo playback and session history. Uploaded file bytes, canvas overrides,
-webhook connection states, and history are not saved. Applied repair changes to
-the plan can be saved here. Opening this page does not make another Muse call;
-live workflow execution is not available.
-
-## Run on Canvas
-
-Open `/run-on-canvas` from Plan Workflow or the sidebar, or directly to inspect
-the sample. The existing React Flow dependency renders draggable steps, directed
-branch paths, zoom controls, and a minimap. Select a node or use the Selected step
-dropdown to inspect it. The inspector can apply a display name (1–80 trimmed
-characters), show field mappings and sample output, and open the same webhook
-template dialog used by planning. Adding/removing steps or rewiring paths is not
-implemented. Reset layout restores positions without changing display names.
-Parsed workflows can be arranged and inspected, but Run workflow is disabled:
-the sample playback scenarios apply only to the original support example.
-
-`useCanvasDraft` owns canvas names and positions above the routes, alongside
-the webhook connection state. These survive navigation; reloading resets them.
-Canvas name changes are local display overrides and do not modify the source plan.
-The canvas page loads through a separate JavaScript chunk.
-
-`data/sampleScenarios.ts` supplies urgent-success, standard-success, and
-urgent-delivery-failure fixtures for the support-triage example. Run workflow plays
-these results with per-step states, sample output, highlighted paths, and a log.
-The input selects a branch explicitly; it never infers or resolves the live
-urgency rule. Demo playback works before webhook setup because no external
-services are contacted. HTTP codes are illustrative fixtures.
-
-`demoPlayback.ts` creates immutable playback frames and stops at a failure.
-`useDemoRun` schedules the frames and supports Stop. Run state now lives above
-the routes so its terminal result remains available for repair review. Leaving
-the canvas during playback stops that run. Starting a new run replaces the log
-and invalidates the previous repair review. Layout/name changes are disabled
-during playback. A failed run enables Review repair / Continue to self-heal.
-
-The future REST integration should supply validated canvas data and actual
-execution events instead of fixtures. Demo statuses are not proof of connected
-live endpoints, successful delivery, or a runnable workflow.
-
-## Self-heal
-
-`/self-heal` is available through the sidebar and failed canvas runs. Without a
-failed run it shows an empty state. To inspect the full frontend flow, select
-Urgent request · delivery failure on the canvas, run it, then select Review repair.
-
-The current repair is bounded to the fixture's on-call webhook HTTP 400 error:
-the receiver expects `title` rather than `heading`. `repair.ts` builds the original
-payload from the failed run's upstream values and the webhook template. The page
-shows the error response/events, before/after payloads, receiver contract, and
-mapping change. It offers no invented proposal for unsupported failures.
-
-Verify repair checks required string fields, the renamed value, preservation of
-other fields, and template/mapping consistency. Apply repair & resume remains
-disabled until these checks pass. Applying also rejects stale plan mappings or a
-different current run. The local plan updates only the affected step mapping and
-webhook payload template, leaving other steps and connection states intact.
-Replay preserves the earlier successful steps and skipped branch, then plays only
-the failed delivery. Subsequent fixture runs honor the applied field rename.
-
-Reject & keep editing preserves the original configuration and returns to the
-canvas. The rejected review can be reopened. Verification, decisions, the current
-run, and plan updates survive navigation for this session; reloading resets them.
-Self-heal is a separately loaded page. Successful replay stays on the canvas;
-the Context & logs button opens its history.
-
-These are frontend fixtures and local checks, not MUSE output, sandbox execution,
-or live webhook delivery. No API requests, secrets, database writes, automatic
-repair policies, or deployments are implemented. For REST integration, replace
-the proposal/contract fixtures with validated responses and versioned server-side
-verification, patch, and replay results. Keep this implementation context out of
-the product's visible UI wording.
-
-Development/demo terminology stays in source names, comments, and documentation.
-The interface uses normal workflow labels; those wording changes do not enable
-live connections or execution.
-
-## Context & logs
-
-`/context-and-logs` is the sixth page and is accessible from the sidebar and
-canvas footer. Successful executions and repair replays stay on the canvas until
-the user clicks Context & logs. That button selects the current run's records.
-Failures remain on the canvas for repair review. Stopped and failed runs can also
-be inspected through the sidebar. An empty session shows an empty history state.
-
-`useSessionHistory` observes the run and repair state above the routes. `journal.ts`
-deduplicates repeated effect observations and captures immutable context/output
-snapshots. A replay is a new attempt under the same run ID, preserving the original
-failed attempt and its pre-repair mappings. Repair events retain review opening,
-verification, rejection, reopening, and application even after the active repair
-review is cleared by a new run. Starting a new execution adds history rather than
-replacing earlier records. No database or browser-storage persistence is used;
-reloading clears this session history.
-
-Run history supports search and status filters. Selecting a record exposes its
-step outputs, filterable execution events, repair decision timeline, and original
-input/plan/webhook context. The `run` and `view` URL parameters select an attempt
-and detail panel; a run ID selects its latest attempt. Timestamps display in
-Asia/Manila, and durations reflect local playback timings. Historical input stores
-only diagram metadata, not file contents or object URLs. No credentials are stored.
-
-All six UI stages are available. Planning, canvas, healing, and history use lazy
-page bundles. The history is frontend audit data for the current fixtures, not
-server execution evidence, AI memory, or VectorDB persistence. REST integration
-must replace local observations with authoritative run IDs, server timestamps,
-versioned workflow snapshots, and persistent audit events.
-
-When deploying this SPA, configure the frontend host to serve `index.html` for
-client routes such as `/parse-diagram`, `/plan-workflow`, `/run-on-canvas`, `/self-heal`, and `/context-and-logs`. Vite handles this
-during local development.
+These commands do not call Muse. Legacy sample/fixture utilities remain isolated
+from active pages; their presence does not enable execution or a demo connection.

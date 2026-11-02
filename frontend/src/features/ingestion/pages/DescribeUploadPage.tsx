@@ -8,7 +8,6 @@ import { MAX_PROMPT_LENGTH } from '../validation'
 
 const inputPanelClasses = 'min-w-0 rounded-xl border border-line bg-surface p-5 xl:p-6'
 
-const examplePrompt = 'When a new Shopify order comes in, create a deal in HubSpot and post a summary to the #sales channel in Slack.'
 
 type DescribeUploadPageProps = {
   draft: IngestionFormState
@@ -62,7 +61,7 @@ export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProp
             </div>
             <div className="mt-3 flex items-start justify-between gap-2.5 md:max-xl:flex-col md:max-xl:gap-1.5">
               <span id="prompt-tip" className="max-w-44 text-[9px] leading-[1.8] text-muted md:max-xl:max-w-none">Name the apps, the trigger, and the action.</span>
-              <Button variant="text" size="inline" onClick={() => { draft.updatePrompt(examplePrompt); promptRef.current?.focus() }}>Use a template <Icon name="arrow" width="13" height="13" /></Button>
+              <span className="text-[9px] text-muted">Your description becomes the source for Muse.</span>
             </div>
           </section>
 
