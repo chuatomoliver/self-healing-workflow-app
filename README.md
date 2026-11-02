@@ -1,48 +1,40 @@
 # Metaflow
 
-Metaflow helps you turn a description or diagram into a visual workflow. Explain
-what you want to happen, and Muse AI helps identify the steps, how they connect,
-and where webhooks could help services pass information to one another.
-
-For example: “When a new order arrives, create a sales record and notify the team.”
-Metaflow turns that idea into a proposed workflow for you to review.
+Metaflow turns a description or diagram into a visual workflow. Muse AI prepares
+the steps, rules, field mappings, and suggested webhook connections for you.
 
 ## How to use it
 
-1. **Describe your workflow.** Explain what starts the process and what should happen next.
-2. **Add a diagram if you have one.** You can use a PNG, JPG, or PDF up to 10 MB.
-3. **Select Continue.** Muse reads your description and diagram and suggests a workflow structure.
-4. **Set up the workflow.** Review the steps, edit their settings, answer open questions, and configure suggested webhooks. You can also ask Muse for a detailed plan.
-5. **Save your draft.** Give it a name so you can reopen it later.
+1. **Describe the process.** Explain what starts it, the information it receives, and what should happen. Add a PNG, JPG, or PDF diagram if useful.
+2. **Select Continue.** Muse builds a proposed workflow and fills in its setup. Check the diagram and answer any missing details.
+3. **Save your draft.** You can reopen it later with its settings and layout.
+4. **Run it on the canvas.** Supply the source data. The canvas shows completed, failed, and skipped steps, with their actual outputs.
+5. **Review a repair if needed.** Muse can suggest a missing-field mapping. Check the proposal, then apply it to resume from the failed step. Completed deliveries are kept.
+6. **Open Context & logs.** Inspect saved runs, original inputs, step attempts, outputs, and repair decisions. This history survives reloading.
 
-Saved drafts keep your description, diagram structure, and plan. Original uploaded
-files and run history are not saved.
+## Connecting services
 
-## About webhook suggestions
+The backend owner connects each outgoing service once. Muse can reuse that saved
+connection in future prompts. Credentials stay on the backend. You can also test
+an individual outgoing webhook and inspect its real delivery result.
 
-Muse can suggest where an outside service should send or receive information,
-explain why it would help, and propose what information to include.
+## Muse usage
 
-Suggestions are labeled **Suggested by Muse** and **Needs setup**. Open Configure
-to enter the planned address, authentication reference, and payload fields. Reviewed
-configuration is labeled **Configured · not tested**; it does not mean services are connected.
+Continue, Update setup with Muse, first-time execution preparation for a saved
+version, and repair suggestions use Meta credits. Later runs reuse the prepared
+execution. Reviewing, saving, opening logs, and applying an approved repair make
+no additional AI request. There are no automatic paid retries.
 
-## Using Muse AI
+Successful approved field aliases can be reused by later runs of the same saved
+version. Repairs cannot overwrite data or invalidate completed decisions. An
+uncertain delivery needs a receiver check before starting another run.
 
-Muse needs an access key configured on the computer running Metaflow. On Windows,
-the key can be saved once and reused after restarting the computer.
+## What can run today?
 
-Selecting Continue sends your description and optional diagram to Muse. This uses
-your Meta AI credits or paid allowance. Generating a detailed plan is a separate,
-explicit AI action. Opening pages, editing setup, and saving drafts do not call Muse.
+Manual-input workflows with validation, field transformations, decisions, and
+outgoing webhooks. Incoming event receivers, native app/OAuth connectors, loops,
+parallel execution, and shared team access are still being built. Unsupported
+steps are reported before execution starts.
 
-## What is still being built?
-
-Metaflow currently helps you understand and prepare workflows. Automatically
-running your workflows, delivering real webhooks, repairing failed runs with AI,
-and sharing access with a team are still in progress. Pages show your current workflow
-and actual session activity; they do not load sample runs or repair results.
-
-For installation and configuration, see the [setup guide](backend/README.md#setup).
-More detailed guides are available for the [app](frontend/README.md) and
-[backend services](backend/README.md).
+For installation, see the [setup guide](backend/README.md#setup). More details are
+available in the [app guide](frontend/README.md) and [backend guide](backend/README.md).

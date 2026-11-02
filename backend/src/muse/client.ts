@@ -15,6 +15,7 @@ type MuseReply = {
 export type MuseTransportOptions = {
   getKey?: () => Promise<string | undefined>; send?: typeof fetch
   onResponse?: (details: MuseResponseDetails) => void
+  maxOutputTokens?: number
 }
 const invalidReply = () => new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse could not produce a valid workflow response. Review your input before trying again.')
 
@@ -46,7 +47,7 @@ export function createMuseJsonRequest(options: MuseTransportOptions = {}) {
       const response = await (options.send ?? fetch)('https://api.meta.ai/v1/responses', {
         method: 'POST', redirect: 'error', signal,
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: MUSE_PARSE_MODEL, store: false, max_output_tokens: 8192, reasoning: { effort: reasoningEffort }, instructions,
+        body: JSON.stringify({ model: MUSE_PARSE_MODEL, store: false, max_output_tokens: options.maxOutputTokens ?? 8192, reasoning: { effort: reasoningEffort }, instructions,
           input: [{ role: 'user', content }], text: { format: { type: 'json_schema', name, strict: true, schema: museOutputSchema(schema) } },
         }),
       })

@@ -83,7 +83,7 @@ export function DescribeUploadPage({ draft, onContinue }: DescribeUploadPageProp
         <div className="mt-7 flex justify-end">
           <Button type="submit" className="min-w-36 md:min-w-[133px]">Continue <Icon name="arrow" width="17" height="17" /></Button>
         </div>
-        <p className="mt-3 text-right text-[10px] leading-relaxed text-muted">Continue sends your description and diagram to Muse for parsing. API usage may apply.</p>
+        <p className="mt-3 text-right text-[10px] leading-relaxed text-muted">Continue asks Muse to build your workflow and configure its setup in one request. API usage may apply.</p>
       </form>
       <footer className="mt-8 flex items-center justify-between border-t border-line pt-5 text-[8px] tracking-[1.5px] text-muted md:mt-10">
         <span>DESCRIBE OR UPLOAD</span>

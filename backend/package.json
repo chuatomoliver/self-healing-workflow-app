@@ -15,8 +15,10 @@
     "muse:test:prompt": "node scripts/test-muse.ts --prompt",
     "muse:setup": "node scripts/test-muse.ts --save",
     "muse:forget": "node scripts/test-muse.ts --forget",
+    "webhook:secret": "node scripts/setup-webhook-secret.ts",
+    "webhook:connection": "node scripts/setup-webhook-connection.ts",
     "db:migrate": "node src/migrate.ts"
   },
-  "dependencies": { "fastify": "^5.12.7", "mysql2": "^3.24.6" },
+  "dependencies": { "ajv": "^8.20.0", "fastify": "^5.12.7", "mysql2": "^3.24.6" },
   "devDependencies": { "@types/node": "^24.0.0", "typescript": "~7.0.2" }
 }

@@ -14,6 +14,8 @@ import { getWorkflow } from './features/workflows/api'
 import type { WorkflowActivity } from './features/history/activity'
 import type { ParsedDiagram, SavedWorkflow, WorkflowDraft, WorkflowPlan } from '../../shared/workflows'
 import { refreshPlanChecks } from '../../shared/setup'
+import { isWorkflowDirty } from './features/workflows/draftState'
+import { useWorkflowRuns } from './features/execution/useWorkflowRuns'
 
 const PlanWorkflowPage = lazy(() => import('./features/workflows/pages/PlanWorkflowPage').then((module) => ({ default: module.PlanWorkflowPage })))
 const RunCanvasPage = lazy(() => import('./features/canvas/pages/RunCanvasPage').then((module) => ({ default: module.RunCanvasPage })))
@@ -44,7 +46,7 @@ function App() {
   }, [initialId, retry])
   if (loading || error) return <AppLayout>{loading ? <p role="status" className="py-12 text-xs text-muted">Opening saved workflow…</p> : <section className="py-12"><p role="alert" className="mb-4 text-xs text-danger">{error}</p><Button onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1) }}>Try again</Button><a href={workflowRoutes.plan} className="ml-4 text-xs text-accent underline">Return to saved drafts</a></section>}</AppLayout>
   return <WorkflowWorkspace key={workspace.key} initialWorkflow={workspace.workflow} initialDraft={workspace.draft} initialFile={workspace.file} activities={activities} record={record}
-    onParsed={(draft, file) => { setWorkspace((current) => ({ workflow: null, draft, file, key: current.key + 1 })); record('parse', draft.plan.title, `Muse returned ${draft.diagram.nodes.length} steps and ${draft.plan.webhooks.length} webhook suggestions.`); navigate(workflowRoutes.parse) }}
+    onParsed={(draft, file) => { setWorkspace((current) => ({ workflow: null, draft, file, key: current.key + 1 })); record('parse', draft.plan.title, `Muse prepared ${draft.diagram.nodes.length} steps and ${draft.plan.webhooks.length} webhook suggestions.`); navigate(workflowRoutes.parse) }}
     onOpen={(workflow) => { setWorkspace((current) => ({ workflow, key: current.key + 1 })); record('open', workflow.plan.title, `Opened saved draft version ${workflow.version}.`); navigate(`${workflowRoutes.plan}?workflow=${encodeURIComponent(workflow.id)}`) }} />
 }
 
@@ -56,7 +58,7 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
   const initial = initialWorkflow ?? initialDraft
   const input = useIngestionDraft(initial?.prompt, initialFile)
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const [plan, setPlan] = useState<WorkflowPlan | null>(() => initial ? refreshPlanChecks(initial.plan) : null)
   const [diagram, setDiagram] = useState<ParsedDiagram | null>(initial?.diagram ?? null)
   const [savedWorkflow, setSavedWorkflow] = useState(() => initialWorkflow ? { ...initialWorkflow, plan: refreshPlanChecks(initialWorkflow.plan) } : null)
@@ -67,7 +69,24 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
   const parseRequest = useRef<AbortController | null>(null)
   const planRequest = useRef<AbortController | null>(null)
   const currentDraft: WorkflowDraft | null = plan && diagram ? { prompt: input.prompt, plan, diagram } : null
+  const savedWorkflowId = savedWorkflow?.id
+  const execution = useWorkflowRuns(savedWorkflowId, savedWorkflow?.version)
+  useEffect(() => {
+    if (!savedWorkflowId || !execution.selectedId || parsing) return
+    const params = new URLSearchParams(search)
+    if (params.get('run') === execution.selectedId) return
+    params.set('workflow', savedWorkflowId); params.set('run', execution.selectedId)
+    navigate({ pathname, search: `?${params.toString()}` }, { replace: true })
+  }, [savedWorkflowId, execution.selectedId, parsing, pathname, search, navigate])
   useEffect(() => () => { parseRequest.current?.abort(); planRequest.current?.abort() }, [])
+  useEffect(() => {
+    if (!savedWorkflowId || parsing) return
+    const params = new URLSearchParams(search)
+    if (params.get('workflow') === savedWorkflowId) return
+    // Keep the selected saved draft addressable after navigating and reloading.
+    params.set('workflow', savedWorkflowId)
+    navigate({ pathname, search: `?${params.toString()}` }, { replace: true })
+  }, [savedWorkflowId, pathname, search, parsing, navigate])
   useEffect(() => {
     if (pathname !== workflowRoutes.parse) parseRequest.current?.abort()
     if (pathname !== workflowRoutes.plan) planRequest.current?.abort()
@@ -112,7 +131,7 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
   }
   function renameStep(id: string, title: string) {
     if (!plan || !diagram || !title.trim() || title.trim().length > 200) return
-    changePlan({ ...plan, steps: plan.steps.map((step) => step.id === id ? { ...step, title: title.trim(), reviewed: false } : step) }, 'Updated a step name on the canvas.')
+    changePlan({ ...plan, steps: plan.steps.map((step) => step.id === id ? { ...step, title: title.trim(), reviewed: false, configuredBy: undefined } : step) }, 'Updated a step name on the canvas.')
     setDiagram({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, label: title.trim() } : node) })
   }
   function moveSteps(positions: Record<string, { x: number; y: number }>) {
@@ -126,11 +145,11 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
   const noWorkflow = (title: string) => <WorkflowEmptyState title={title} description="Your workflow will appear here after parsing. You can also open a saved draft in Plan Workflow." />
   return <AppLayout><Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading workflow page…</p>}><Routes>
     <Route path={workflowRoutes.describe} element={<DescribeUploadPage draft={input} onContinue={() => { void startParse() }} />} />
-    <Route path={workflowRoutes.parse} element={parsing || parseError ? <section className="my-12 rounded-xl border border-line bg-surface p-6" aria-busy={parsing}><h1 className="text-xl font-semibold">{parsing ? 'Parsing your workflow with Muse…' : 'Parsing needs attention'}</h1>{parsing ? <p role="status" className="mt-3 text-xs text-muted">Reading your description and diagram. This can take up to 90 seconds.</p> : <p role="alert" className="mt-3 text-xs leading-relaxed text-danger">{parseError}</p>}<div className="mt-5 flex gap-3">{!parsing && <Button onClick={() => { void startParse() }}>Try again</Button>}<Button variant="secondary" onClick={() => { parseRequest.current?.abort(); if (parsing) record('parse', plan?.title ?? 'New workflow', 'Cancelled parsing. The request may already have reached Muse.', 'cancelled'); navigate(workflowRoutes.describe) }}>{parsing ? 'Cancel' : 'Back to input'}</Button></div></section> : diagram && plan ? <ParseDiagramPage result={diagram} sourceFile={input.diagram} sourceUrl={input.previewUrl} prompt={input.prompt} onContinue={() => { changePlan({ ...plan, structureReviewed: true }, 'Reviewed the workflow structure.'); navigate(workflowRoutes.plan) }} /> : noWorkflow('No workflow to review yet')} />
-    <Route path={workflowRoutes.plan} element={plan && diagram ? <PlanWorkflowPage plan={plan} prompt={input.prompt} sourceFile={input.diagram} storage={storage} onChangePlan={changePlan} planning={planning} planError={planError} onGeneratePlan={() => { void startPlanning() }} onCancelPlanning={() => { planRequest.current?.abort(); record('plan', plan.title, 'Cancelled detailed planning. The request may already have reached Muse.', 'cancelled') }} onContinue={() => navigate(workflowRoutes.canvas)} /> : <>{noWorkflow('Create or open a workflow')}{storage}</>} />
-    <Route path={workflowRoutes.canvas} element={plan && diagram ? <RunCanvasPage plan={plan} diagram={diagram} onRenameStep={renameStep} onMoveSteps={moveSteps} onEditSetup={() => navigate(workflowRoutes.plan)} /> : noWorkflow('Your workflow canvas is empty')} />
-    <Route path={workflowRoutes.heal} element={<SelfHealPage plan={plan} />} />
-    <Route path={workflowRoutes.logs} element={<ContextLogsPage plan={plan} activities={activities} />} />
+    <Route path={workflowRoutes.parse} element={parsing || parseError ? <section className="my-12 rounded-xl border border-line bg-surface p-6" aria-busy={parsing}><h1 className="text-xl font-semibold">{parsing ? 'Preparing your workflow with Muse…' : 'Parsing needs attention'}</h1>{parsing ? <p role="status" className="mt-3 text-xs text-muted">Building the steps and configuring their setup in one request. This can take up to 90 seconds.</p> : <p role="alert" className="mt-3 text-xs leading-relaxed text-danger">{parseError}</p>}<div className="mt-5 flex gap-3">{!parsing && <Button onClick={() => { void startParse() }}>Try again</Button>}<Button variant="secondary" onClick={() => { parseRequest.current?.abort(); if (parsing) record('parse', plan?.title ?? 'New workflow', 'Cancelled parsing. The request may already have reached Muse.', 'cancelled'); navigate(workflowRoutes.describe) }}>{parsing ? 'Cancel' : 'Back to input'}</Button></div></section> : diagram && plan ? <ParseDiagramPage result={diagram} sourceFile={input.diagram} sourceUrl={input.previewUrl} prompt={input.prompt} onContinue={() => { changePlan({ ...plan, structureReviewed: true }, 'Reviewed the workflow structure.'); navigate(workflowRoutes.plan) }} /> : noWorkflow('No workflow to review yet')} />
+    <Route path={workflowRoutes.plan} element={plan && diagram ? <PlanWorkflowPage plan={plan} prompt={input.prompt} sourceFile={input.diagram} storage={storage} onChangePlan={changePlan} planning={planning} planError={planError} saved={savedWorkflow} canDeliver={!!currentDraft && !isWorkflowDirty(currentDraft, savedWorkflow)} onGeneratePlan={() => { void startPlanning() }} onCancelPlanning={() => { planRequest.current?.abort(); record('plan', plan.title, 'Cancelled detailed planning. The request may already have reached Muse.', 'cancelled') }} onContinue={() => navigate(workflowRoutes.canvas)} /> : <>{noWorkflow('Create or open a workflow')}{storage}</>} />
+    <Route path={workflowRoutes.canvas} element={plan && diagram ? <RunCanvasPage plan={plan} diagram={diagram} saved={savedWorkflow} canRun={!!currentDraft && !!savedWorkflow && !isWorkflowDirty(currentDraft, savedWorkflow)} execution={execution} onRenameStep={renameStep} onMoveSteps={moveSteps} onEditSetup={() => navigate(workflowRoutes.plan)} /> : noWorkflow('Your workflow canvas is empty')} />
+    <Route path={workflowRoutes.heal} element={<SelfHealPage plan={plan} execution={execution} />} />
+    <Route path={workflowRoutes.logs} element={<ContextLogsPage plan={plan} activities={activities} execution={execution} />} />
     <Route path="*" element={<Navigate to={workflowRoutes.describe} replace />} />
   </Routes></Suspense></AppLayout>
 }

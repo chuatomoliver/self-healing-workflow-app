@@ -12,6 +12,7 @@ export async function generateWorkflowPlan(draft: PlanWorkflowRequest, signal: A
   const result = await response.json().catch(() => null)
   if (!response.ok) {
     const messages: Record<string, string> = {
+      CONNECTIONS_UNAVAILABLE: 'The backend could not load saved service connections. Check its connection setup before retrying.',
       MUSE_NOT_CONFIGURED: 'Configure the Muse key in the backend before generating a plan.',
       MUSE_AUTH_FAILED: 'Muse rejected the key or its model access.',
       MUSE_MODEL_UNAVAILABLE: 'The configured Muse model is unavailable. Check model access in the Meta developer dashboard.',

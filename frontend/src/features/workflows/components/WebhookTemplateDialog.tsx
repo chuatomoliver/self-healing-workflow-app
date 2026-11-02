@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import type { PlanWebhookTemplate } from '../types'
-import { webhookAuthenticationIssue, webhookEndpointIssue, webhookPayloadIssue } from '../../../../../shared/setup.ts'
+import { webhookAddressIssue, webhookAuthenticationIssue, webhookEndpointIssue, webhookPayloadIssue } from '../../../../../shared/setup.ts'
 import { PairRows, setupInput } from './SetupFields'
 
 export function WebhookTemplateDialog({ template, onUpdate, onClose }: { template: PlanWebhookTemplate; onUpdate: (template: PlanWebhookTemplate) => void; onClose: () => void }) {
@@ -15,20 +15,20 @@ export function WebhookTemplateDialog({ template, onUpdate, onClose }: { templat
   const payloadIssue = webhookPayloadIssue(candidate)
   const setup = value.setup ?? { endpointReviewed: false, authenticationReviewed: false, payloadReviewed: false }
   function update(patch: Partial<PlanWebhookTemplate>) {
-    setValue((current) => ({ ...current, ...patch, setup: { endpointReviewed: false, authenticationReviewed: false, payloadReviewed: false } }))
+    setValue((current) => ({ ...current, ...patch, configuredBy: undefined, connectionId: undefined, setup: { endpointReviewed: false, authenticationReviewed: false, payloadReviewed: false } }))
     setError('')
   }
   return <Dialog open title={`Set up ${template.name}`} onClose={onClose}>
     <form onSubmit={(event) => {
       event.preventDefault()
-      let validAddress = false
-      try { const url = new URL(value.endpoint.urlTemplate); validAddress = url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash } catch { /* Show a safe validation message below. */ }
-      if (!value.name.trim() || !value.event.trim() || !validAddress || authIssue || payloadIssue || new Set(rows.map((row) => row.first)).size !== rows.length) {
-        setError(authIssue ?? payloadIssue ?? 'Use a valid HTTPS address and unique payload names. Complete the name and event.'); return
+      const addressIssue = webhookAddressIssue(value.endpoint.urlTemplate)
+      if (!value.name.trim() || !value.event.trim() || addressIssue || authIssue || payloadIssue || new Set(rows.map((row) => row.first)).size !== rows.length) {
+        setError(addressIssue ?? authIssue ?? payloadIssue ?? 'Complete the name and event, and use unique payload field names.'); return
       }
       onUpdate(candidate)
     }}>
       <p className="text-[11px] leading-relaxed text-muted">{template.suggestedBy === 'muse' ? 'Suggested by Muse. ' : ''}{template.suggestionReason}</p>
+      {template.configuredBy === 'muse' && <p className="mt-3 text-[11px] leading-relaxed text-accent">Muse configured this webhook using the saved {template.connectionId} connection. Individual review checkboxes are optional. Editing settings switches to manual setup.</p>}
       <p className="mt-3 rounded-lg bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">This form saves setup to your draft. It does not contact the destination, register a webhook, or test credentials.</p>
       <label className="mt-4 block text-[11px] font-medium">Webhook name<input className={setupInput} value={value.name} maxLength={200} required onChange={(event) => update({ name: event.target.value })} /></label>
       <p className="mt-3 text-[10px] font-medium uppercase text-accent">{value.direction} · {value.method}</p>

@@ -14,7 +14,7 @@ export const extractionSchema = object({
   webhooks: { type: 'array', maxItems: 10, items: object({
     id: { ...id, maxLength: 80 }, stepId: id, name: { ...text(200, 1), pattern: '\\S' },
     direction: { type: 'string', enum: ['incoming', 'outgoing'] },
-    event: { ...text(200, 1), pattern: '^[A-Za-z][A-Za-z0-9_.:-]*$' },
+    event: { ...text(200, 1), pattern: '^[A-Za-z][A-Za-z0-9_.:-]*$', description: 'Machine-readable event identifier, for example order.created. Start with a letter; use only letters, digits, underscores, periods, colons, or hyphens. Never use spaces, slashes, or a sentence.' },
     purpose: { ...text(1000, 1), pattern: '\\S' }, suggestionReason: { ...text(1000, 1), pattern: '\\S' },
     payloadFields: { type: 'array', minItems: 1, maxItems: 20, items: object({
       name: { ...text(100, 1), pattern: '^[A-Za-z][A-Za-z0-9_]*$' },

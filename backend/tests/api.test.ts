@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.ts'
 import { ApiError } from '../src/errors.ts'
 import type { WorkflowRepository } from '../src/workflows/repository.ts'
 import { draftFixture } from './fixtures.ts'
+import { refreshPlanChecks } from '../../shared/setup.ts'
 
 function repository(): WorkflowRepository {
   return {
@@ -82,4 +83,29 @@ test('rejects cross-origin and non-local hosts and sanitizes database errors', a
   const health = await app.inject('/api/health')
   assert.equal(health.statusCode, 503)
   assert.ok(!health.body.includes('DO_NOT_EXPOSE'))
+})
+
+test('create and update derive setup checks from actual configuration before writing', async (t) => {
+  const repo = repository()
+  let writes = 0
+  const saved = (draft: ReturnType<typeof draftFixture>, version: number) => ({ ...draft, id: randomUUID(), version, createdAt: '', updatedAt: '' })
+  repo.create = async (draft) => { writes++; return saved(draft, 1) }
+  repo.update = async (_id, _version, draft) => { writes++; return saved(draft, 2) }
+  const app = buildApp({ repository: repo })
+  t.after(() => app.close())
+  const draft = draftFixture()
+  draft.plan.checks = [{ id: 'fabricated', title: 'Everything reviewed', description: 'Stale browser state', status: 'reviewed' }]
+  for (const request of [
+    { method: 'POST' as const, url: '/api/workflows', payload: draft },
+    { method: 'PATCH' as const, url: `/api/workflows/${randomUUID()}`, payload: { expectedVersion: 1, draft } },
+  ]) {
+    const response = await app.inject(request)
+    assert.ok([200, 201].includes(response.statusCode))
+    assert.deepEqual(response.json().workflow.plan.checks, refreshPlanChecks(draft.plan).checks)
+    assert.equal(response.json().workflow.plan.checks.find((check: { id: string }) => check.id === 'webhooks').status, 'needs-input')
+  }
+  draft.plan.steps[0].configuration = [{ label: 'Source', value: '', needsInput: true }]
+  draft.plan.steps[0].reviewed = true
+  assert.equal((await app.inject({ method: 'POST', url: '/api/workflows', payload: draft })).statusCode, 400)
+  assert.equal(writes, 2)
 })

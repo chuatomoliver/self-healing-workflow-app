@@ -6,27 +6,28 @@ import type {
 
 export const fieldReferencePattern =
   /^\{\{[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*){1,8}\}\}$/;
-export function webhookEndpointIssue(
-  template: PlanWebhookTemplate,
-): string | null {
+export function webhookAddressIssue(address: string): string | null {
   try {
-    const url = new URL(template.endpoint.urlTemplate.trim());
+    const url = new URL(address.trim());
     if (
-      url.protocol !== "https:" ||
+      (url.protocol !== "https:" && !(url.protocol === "http:" && url.hostname === "127.0.0.1" && url.port)) ||
       url.username ||
       url.password ||
       url.search ||
       url.hash
     )
-      return "Use an HTTPS address without embedded credentials, query parameters, or fragments.";
-    if (
-      url.hostname.endsWith(".invalid") ||
-      /[{}]/.test(template.endpoint.urlTemplate)
-    )
-      return "Replace the placeholder endpoint with the address you intend to use.";
+      return "Use an HTTPS address, or the backend's configured local test receiver, without credentials, query parameters, or fragments.";
   } catch {
     return "Enter a valid HTTPS endpoint address.";
   }
+  return null;
+}
+export function webhookEndpointIssue(template: PlanWebhookTemplate): string | null {
+  const issue = webhookAddressIssue(template.endpoint.urlTemplate);
+  if (issue) return issue;
+  const url = new URL(template.endpoint.urlTemplate.trim());
+  if (url.hostname.endsWith(".invalid") || /[{}]/.test(template.endpoint.urlTemplate))
+    return "Replace the placeholder endpoint with the address you intend to use.";
   return null;
 }
 export function webhookAuthenticationIssue(
@@ -60,15 +61,16 @@ export function webhookPayloadIssue(
   return null;
 }
 export function webhookSetupIssues(template: PlanWebhookTemplate): string[] {
+  const automatic = template.configuredBy === 'muse' && !!template.connectionId;
   return [
     webhookEndpointIssue(template),
     webhookAuthenticationIssue(template),
     webhookPayloadIssue(template),
-    !template.setup?.endpointReviewed ? "Review the endpoint." : null,
-    !template.setup?.authenticationReviewed
+    !automatic && !template.setup?.endpointReviewed ? "Review the endpoint." : null,
+    !automatic && !template.setup?.authenticationReviewed
       ? "Review the authentication reference."
       : null,
-    !template.setup?.payloadReviewed ? "Review the payload mappings." : null,
+    !automatic && !template.setup?.payloadReviewed ? "Review the payload mappings." : null,
   ].filter((issue): issue is string => !!issue);
 }
 export function webhookMappingsIssue(
@@ -131,6 +133,9 @@ export function workflowSetupSummary(plan: WorkflowPlan) {
   const reviewedSteps = plan.steps.filter(
     (step) => step.reviewed && !stepSetupIssues(step).length,
   ).length;
+  const configuredSteps = plan.steps.filter(
+    (step) => (step.reviewed || step.configuredBy === 'muse') && !stepSetupIssues(step).length,
+  ).length;
   const configuredWebhooks = plan.webhooks.filter((webhook) => {
     const step = plan.steps.find(
       (item) => item.webhookTemplateId === webhook.id,
@@ -147,10 +152,10 @@ export function workflowSetupSummary(plan: WorkflowPlan) {
   const complete =
     !!plan.steps.length &&
     !!plan.structureReviewed &&
-    reviewedSteps === plan.steps.length &&
+    configuredSteps === plan.steps.length &&
     configuredWebhooks === plan.webhooks.length &&
     answeredQuestions === plan.questions.length;
-  return { reviewedSteps, configuredWebhooks, answeredQuestions, complete };
+  return { reviewedSteps, configuredSteps, configuredWebhooks, answeredQuestions, complete };
 }
 export function refreshPlanChecks(plan: WorkflowPlan): WorkflowPlan {
   const summary = workflowSetupSummary(plan);
@@ -166,19 +171,19 @@ export function refreshPlanChecks(plan: WorkflowPlan): WorkflowPlan {
       {
         id: "configuration",
         title: "Step setup",
-        description: `${summary.reviewedSteps} of ${plan.steps.length} steps reviewed.`,
+        description: `${summary.configuredSteps} of ${plan.steps.length} steps configured.`,
         status:
-          summary.reviewedSteps === plan.steps.length
-            ? "reviewed"
+          summary.configuredSteps === plan.steps.length
+            ? plan.steps.some((step) => step.configuredBy === 'muse' && !step.reviewed) ? "configured" : "reviewed"
             : "needs-input",
       },
       {
         id: "webhooks",
         title: "Webhook setup",
-        description: `${summary.configuredWebhooks} of ${plan.webhooks.length} webhook configurations reviewed. Connections have not been tested.`,
+        description: `${summary.configuredWebhooks} of ${plan.webhooks.length} webhooks configured. See outgoing delivery history for test results.`,
         status:
           summary.configuredWebhooks === plan.webhooks.length
-            ? "reviewed"
+            ? plan.webhooks.some((hook) => hook.configuredBy === 'muse') ? "configured" : "reviewed"
             : "needs-input",
       },
       {
@@ -193,7 +198,7 @@ export function refreshPlanChecks(plan: WorkflowPlan): WorkflowPlan {
       {
         id: "execution",
         title: "Live execution",
-        description: "No execution service is connected yet.",
+        description: "Start a saved workflow on the canvas. Execution results are recorded with each run.",
         status: "not-run",
       },
     ],

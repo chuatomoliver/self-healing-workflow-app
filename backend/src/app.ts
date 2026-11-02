@@ -15,9 +15,19 @@ import { draftFromExtraction } from './muse/draft.ts'
 import { createMusePlanner, planFromProposal, planningSchema } from './muse/planning.ts'
 import type { MusePlanner } from './muse/planning.ts'
 import type { PlanWorkflowRequest, PlanningProposal } from '../../shared/planning.ts'
+import { refreshPlanChecks } from '../../shared/setup.ts'
+import type { DeliveryRequest } from '../../shared/deliveries.ts'
+import type { WebhookDeliveryService } from './webhooks/service.ts'
+import type { WebhookConnection } from '../../shared/connections.ts'
+import { connectionSummaries } from '../../shared/connections.ts'
+import { validateConnectionBindings } from './webhooks/connections.ts'
+import { createMusePreparer, preparationSchema, draftFromPreparation, bindPlanConnections } from './muse/preparation.ts'
+import type { MusePreparer, WorkflowPreparation } from './muse/preparation.ts'
+import type { ExecutionService } from './execution/service.ts'
+import { executionRoutes } from './execution/routes.ts'
 
-type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner }
-export function buildApp({ repository, logger = false, port = 3001, parse, plan }: AppOptions) {
+type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner; prepare?: MusePreparer; connections?: () => Promise<WebhookConnection[]>; hasWebhookCredential?: (reference: string) => Promise<boolean>; webhookDelivery?: WebhookDeliveryService; execution?: ExecutionService }
+export function buildApp({ repository, logger = false, port = 3001, parse, plan, prepare, connections = async () => [], hasWebhookCredential = async () => false, webhookDelivery, execution }: AppOptions) {
   const app = Fastify({
     logger: logger ? { level: 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -30,6 +40,7 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan 
   }
   const parseWorkflow = parse ?? createMuseParser({ onResponse: reportMuse })
   const planWorkflow = plan ?? createMusePlanner({ onResponse: reportMuse })
+  const prepareWorkflow = prepare ?? createMusePreparer({ onResponse: reportMuse })
   const allowedOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'])
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store').header('X-Content-Type-Options', 'nosniff')
@@ -62,21 +73,56 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan 
   app.setNotFoundHandler((request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'This API endpoint could not be found.', requestId: request.id } }))
   app.get('/api/health', async () => { await repository.health(); return { status: 'ok' } })
   let parsing = false
-  app.post<{ Body: PlanWorkflowRequest }>('/api/plan', { schema: { body: draftSchema } }, async (request, reply) => {
-    validateDraft(request.body)
+  app.get('/api/connections', async () => ({ connections: connectionSummaries(await connections()) }))
+  app.post<{ Body: ParseWorkflowRequest }>('/api/prepare', {
+    bodyLimit: MAX_PARSE_BODY_BYTES, schema: { body: parseRequestSchema },
+  }, async (request, reply) => {
+    validateParseInput(request.body)
     if (parsing) throw new ApiError(429, 'PARSE_BUSY', 'Another AI request is in progress. Wait for it to finish.')
     parsing = true
     const controller = new AbortController()
     const disconnect = () => { if (!reply.raw.writableFinished) controller.abort() }
     reply.raw.once('close', disconnect)
     try {
-      const proposal = await planWorkflow(request.body, controller.signal)
+      const catalog = await connections()
+      const output = await prepareWorkflow(request.body, controller.signal, connectionSummaries(catalog))
+      const validate = request.compileValidationSchema(preparationSchema)
+      if (!validate(output)) {
+        const issues = validate.errors as { instancePath?: string; keyword?: string }[] | null | undefined
+        if (issues?.some((issue) => /^\/extraction\/webhooks\/\d+\/event$/.test(issue.instancePath ?? '') && issue.keyword === 'pattern'))
+          throw new ApiError(502, 'MUSE_INVALID_WEBHOOK_EVENT', 'Muse returned a webhook event with unsupported characters. Event identifiers must use a format such as order.created. No draft was replaced and no automatic retry was made.')
+        throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an invalid workflow setup. Your current draft has not been replaced.')
+      }
+      const draft = await draftFromPreparation(output as WorkflowPreparation, request.body.prompt, catalog, hasWebhookCredential)
+      try {
+        if (!request.compileValidationSchema(draftSchema)(draft)) throw new Error('Invalid draft')
+        validateDraft(draft, webhookDelivery?.localReceiverUrl)
+        validateConnectionBindings(draft.plan, catalog)
+      } catch { throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned inconsistent workflow setup. Your current draft has not been replaced.') }
+      return { draft, model: MUSE_PARSE_MODEL }
+    } finally { parsing = false; reply.raw.removeListener('close', disconnect) }
+  })
+  app.post<{ Body: PlanWorkflowRequest }>('/api/plan', { schema: { body: draftSchema } }, async (request, reply) => {
+    validateDraft(request.body, webhookDelivery?.localReceiverUrl)
+    if (parsing) throw new ApiError(429, 'PARSE_BUSY', 'Another AI request is in progress. Wait for it to finish.')
+    parsing = true
+    const controller = new AbortController()
+    const disconnect = () => { if (!reply.raw.writableFinished) controller.abort() }
+    reply.raw.once('close', disconnect)
+    try {
+      const catalog = await connections()
+      const raw = await planWorkflow(request.body, controller.signal, connectionSummaries(catalog))
+      const proposal = raw && typeof raw === 'object' && !Array.isArray(raw) ? { webhookBindings: [], ...raw } : raw
       if (!request.compileValidationSchema(planningSchema)(proposal)) throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an invalid plan. Your current draft has not been replaced.')
-      const nextPlan = planFromProposal(request.body, proposal as PlanningProposal)
+      const proposed = proposal as PlanningProposal
+      const merged = planFromProposal(request.body, proposed)
+      const nextPlan = request.body.plan.configurationMode === 'automatic' || proposed.webhookBindings?.length
+        ? await bindPlanConnections(merged, proposed.webhookBindings, catalog, hasWebhookCredential) : merged
       const draft = { ...request.body, plan: nextPlan }
       try {
         if (!request.compileValidationSchema(draftSchema)(draft)) throw new Error('Invalid plan')
-        validateDraft(draft)
+        validateDraft(draft, webhookDelivery?.localReceiverUrl)
+        validateConnectionBindings(draft.plan, catalog)
       } catch { throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned an inconsistent plan. Your current draft has not been replaced.') }
       return { plan: nextPlan, model: MUSE_PARSE_MODEL }
     } finally { parsing = false; reply.raw.removeListener('close', disconnect) }
@@ -100,7 +146,7 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan 
       const draft = draftFromExtraction(extraction, request.body.prompt)
       try {
         if (!request.compileValidationSchema(draftSchema)(draft)) throw new Error('Invalid draft')
-        validateDraft(draft)
+        validateDraft(draft, webhookDelivery?.localReceiverUrl)
       } catch {
         throw new ApiError(502, 'MUSE_INVALID_RESPONSE', 'Muse returned inconsistent steps or connections. Clarify the workflow and try again.')
       }
@@ -112,14 +158,34 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan 
   })
   app.get('/api/workflows', { schema: { querystring: listQuerySchema } }, async () => ({ workflows: await repository.list() }))
   app.post<{ Body: WorkflowDraft }>('/api/workflows', { schema: { body: draftSchema } }, async (request, reply) => {
-    validateDraft(request.body)
-    const workflow = await repository.create(request.body)
+    validateDraft(request.body, webhookDelivery?.localReceiverUrl)
+    validateConnectionBindings(request.body.plan, await connections())
+    const workflow = await repository.create({ ...request.body, plan: refreshPlanChecks(request.body.plan) })
     return reply.code(201).header('Location', `/api/workflows/${workflow.id}`).send({ workflow })
   })
   app.get<{ Params: { id: string } }>('/api/workflows/:id', { schema: { params: workflowParamsSchema } }, async (request) => ({ workflow: await repository.get(request.params.id) }))
   app.patch<{ Params: { id: string }; Body: UpdateWorkflowRequest }>('/api/workflows/:id', { schema: { params: workflowParamsSchema, body: updateSchema } }, async (request) => {
-    validateDraft(request.body.draft)
-    return { workflow: await repository.update(request.params.id, request.body.expectedVersion, request.body.draft) }
+    validateDraft(request.body.draft, webhookDelivery?.localReceiverUrl)
+    validateConnectionBindings(request.body.draft.plan, await connections())
+    return { workflow: await repository.update(request.params.id, request.body.expectedVersion, {
+      ...request.body.draft, plan: refreshPlanChecks(request.body.draft.plan),
+    }) }
   })
+  const deliveryParams = { type: 'object', additionalProperties: false, required: ['id', 'webhookId'], properties: {
+    id: { type: 'string', format: 'uuid' }, webhookId: { type: 'string', maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+  } }
+  const requireDelivery = () => {
+    if (!webhookDelivery) throw new ApiError(503, 'WEBHOOK_DELIVERY_NOT_CONFIGURED', 'Webhook delivery is not configured on this backend.')
+    return webhookDelivery
+  }
+  app.get<{ Params: { id: string; webhookId: string } }>('/api/workflows/:id/webhooks/:webhookId/deliveries', { schema: { params: deliveryParams, querystring: listQuerySchema } }, async (request) => ({
+    deliveries: await requireDelivery().list(request.params.id, request.params.webhookId),
+  }))
+  app.post<{ Params: { id: string; webhookId: string }; Body: DeliveryRequest }>('/api/workflows/:id/webhooks/:webhookId/test-deliveries', {
+    bodyLimit: 32768, schema: { params: deliveryParams, body: { type: 'object', additionalProperties: false, required: ['requestId', 'expectedVersion', 'sampleData'], properties: {
+      requestId: { type: 'string', format: 'uuid' }, expectedVersion: { type: 'integer', minimum: 1, maximum: 2147483646 }, sampleData: { type: 'object', additionalProperties: true },
+    } } },
+  }, async (request) => ({ delivery: await requireDelivery().deliver(request.params.id, request.params.webhookId, request.body) }))
+  executionRoutes(app, execution)
   return app
 }

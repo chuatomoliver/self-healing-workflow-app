@@ -28,6 +28,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const code = apiError?.error?.code
     // Display known, actionable errors. Do not render arbitrary server/proxy messages.
     const messages: Record<string, string> = {
+      CONNECTION_CHANGED: 'A saved service connection changed or was removed. Update setup with Muse before saving again.',
+      CONNECTIONS_UNAVAILABLE: 'The backend could not load saved service connections. Check its connection setup.',
       VERSION_CONFLICT: 'A newer version was saved in another tab. Reopen it from saved drafts before saving again.',
       WORKFLOW_NOT_FOUND: 'This saved workflow could not be found. Choose another saved draft.',
       INVALID_WORKFLOW: 'The workflow has invalid or inconsistent references. Review its diagram and plan.',

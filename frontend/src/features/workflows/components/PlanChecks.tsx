@@ -2,6 +2,7 @@ import { Icon } from '../../../components/ui/Icon'
 import type { PlanCheck } from '../types'
 
 const checkStates = {
+  configured: { label: 'Configured', color: 'bg-accent-soft text-accent' },
   reviewed: { label: 'Reviewed', color: 'bg-accent-soft text-accent' },
   pending: { label: 'Pending', color: 'bg-slate-100 text-muted' },
   'needs-input': { label: 'Needs input', color: 'bg-amber-50 text-amber-800' },
@@ -17,7 +18,7 @@ export function PlanChecks({ checks }: { checks: PlanCheck[] }) {
         <div className="min-w-0 flex-1"><p className="text-xs font-medium">{check.title}</p>
           <p className="mt-1 text-[10px] leading-relaxed text-muted">{check.description}</p>
         </div>
-        <span className={`shrink-0 rounded-md px-2 py-1 text-[9px] font-medium ${checkStates[check.status].color}`}>{checkStates[check.status].label}</span>
+        <span className={`shrink-0 rounded-md px-2 py-1 text-[9px] font-medium ${checkStates[check.status].color}`}>{check.id === 'execution' ? 'Per run' : checkStates[check.status].label}</span>
       </li>)}
     </ul>
   </section>
