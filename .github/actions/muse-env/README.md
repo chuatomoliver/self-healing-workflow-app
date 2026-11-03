@@ -27,4 +27,7 @@ a GitHub artifact. Build the frontend before this action, with no Muse secret
 in its environment. Keep the backend file outside the public web root.
 
 The provided workflow validates the handoff and removes the temporary file.
-It does not upload to Hostinger or check the API key with the Muse service.
+It does not upload to the host or check the API key with the Muse service. The demo
+runs on Render, which has no GitHub-to-host secret upload here: set `MODEL_API_KEY`
+directly in the Render dashboard (see the
+[backend deployment guide](../../../backend/README.md#deployment)).
