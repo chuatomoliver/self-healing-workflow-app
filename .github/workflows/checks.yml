@@ -31,7 +31,7 @@ jobs:
         image: mysql:8.4
         env:
           # Disposable CI database only; application secrets are never used here.
-          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
           MYSQL_DATABASE: metaflow_test
         ports:
           - 3306/tcp

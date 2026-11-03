@@ -42,23 +42,64 @@ Without Docker, use HTTPS in front of the backend. From the repository root,
 install with `npm ci`, build with `npm run build`, and start with `npm start`. The backend serves
 `frontend/dist` and `/api` on one domain; page refreshes keep working.
 
-Set `NODE_ENV=production`, `APP_ORIGIN=https://your-domain`, `DATABASE_URL`,
-`MODEL_API_KEY`, `DEMO_USERNAME`, and a unique `DEMO_PASSWORD` (16+ characters).
-The hosted database must exist; tables are migrated at startup. `PORT` is supplied
-by the host; `HOST` defaults to `0.0.0.0`. Keep the app port behind the HTTPS proxy.
+The backend serves `frontend/dist` and `/api` on one domain over Render's HTTPS;
+page refreshes keep working.
 
-Use host environment variables or a private `backend/.env` generated during
-deployment. Never publish that file, put secrets in `VITE_*`, or log its contents.
-For GitHub Secrets, use the [Muse secret handoff](../.github/actions/muse-env/README.md)
-in the tech lead's deployment job; the included manual workflow checks loading only.
+### 1. Database
+
+1. Create a free MySQL-compatible cluster and note its host, port, user, and password.
+2. Create an empty database named `metaflow` (letters, numbers, and underscores only).
+   Tables are migrated at startup, but the database itself must already exist.
+3. Build `DATABASE_URL` as `mysql://USER:PASSWORD@HOST:PORT/metaflow`. URL-encode special
+   characters in the password (`@` → `%40`, `#` → `%23`, `/` → `%2F`, `:` → `%3A`).
+4. Set `DATABASE_SSL=true` if the provider requires TLS (TiDB Cloud does). It needs a
+   certificate from a public CA and the URL must not contain query parameters.
+
+### 2. Render web service
+
+Create a **Web Service** from this repository with these settings:
+
+| Setting        | Value                                                    |
+| -------------- | -------------------------------------------------------- |
+| Branch         | `prod` (CI fast-forwards it after checks pass on `main`) |
+| Root directory | repository root (leave blank)                            |
+| Runtime        | Node                                                     |
+| Build command  | `npm ci && npm run build`                                |
+| Start command  | `npm start`                                              |
+| Instance type  | Free                                                     |
+| Auto-deploy    | On commit                                                |
+
+Set these environment variables in the Render dashboard (never in the repository):
+
+| Variable        | Value                                                                              |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `NODE_VERSION`  | `24`                                                                               |
+| `NODE_ENV`      | `production`                                                                       |
+| `APP_ORIGIN`    | the service's public origin, e.g. `https://metaflow.onrender.com` (HTTPS, no path) |
+| `DATABASE_URL`  | from step 1                                                                        |
+| `DATABASE_SSL`  | `true` or `false` per step 1                                                       |
+| `MODEL_API_KEY` | your Muse key                                                                      |
+| `DEMO_USERNAME` | letters, numbers, `_`, `.`, or `-`                                                 |
+| `DEMO_PASSWORD` | unique, 16–256 characters                                                          |
+
+`PORT` is supplied by Render and `HOST` defaults to `0.0.0.0`. If you add a custom
+domain later, update `APP_ORIGIN` to match and redeploy.
+
+Free instances sleep after about 15 minutes without traffic, so the first request
+afterwards takes up to a minute. Run a single instance: request limits are per
+server process. Never publish secrets, put them in `VITE_*`, or log them. The
+[Muse secret handoff](../.github/actions/muse-env/README.md) is optional here, since
+`MODEL_API_KEY` can be set directly in Render.
+
 The browser asks for the demo login. Everyone shares workflows and run history;
-this is a single demo workspace, not separate user accounts. Request limits are
-per server process, so run one instance for this demo.
+this is a single demo workspace, not separate user accounts.
 
-Windows-saved Muse/Slack credentials do not transfer. For Slack, provision
-`WEBHOOK_CONNECTIONS_FILE` on persistent private storage and its matching
-`WEBHOOK_SECRET_<reference>` in the host environment; allow `https://hooks.slack.com`
-in `WEBHOOK_ALLOWED_ORIGINS`. The in-app Slack setup currently uses Windows.
+Windows-saved Muse/Slack credentials do not transfer. Slack needs
+`WEBHOOK_CONNECTIONS_FILE` on persistent private storage, which free Render instances
+do not have, so the catalog is lost on each restart or redeploy. Use a paid instance
+with a disk for Slack. Also set its matching `WEBHOOK_SECRET_<reference>` and allow
+`https://hooks.slack.com` in `WEBHOOK_ALLOWED_ORIGINS`. The in-app Slack setup
+currently uses Windows.
 
 ## Checks
 
