@@ -1,0 +1,62 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      APP_ORIGIN: https://${APP_HOST:?set APP_HOST}
+      DATABASE_URL: mysql://metaflow:${MYSQL_PASSWORD:?set MYSQL_PASSWORD}@db:3306/metaflow
+      DATABASE_SSL: "false"
+      MODEL_API_KEY: ${MODEL_API_KEY:?set MODEL_API_KEY}
+      DEMO_USERNAME: ${DEMO_USERNAME:?set DEMO_USERNAME}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?set DEMO_PASSWORD}
+      WEBHOOK_ALLOWED_ORIGINS: ${WEBHOOK_ALLOWED_ORIGINS:-}
+      WEBHOOK_CONNECTIONS_FILE: /data/connections.json
+    volumes:
+      - app-data:/data
+    networks:
+      - default
+      - proxy
+    # Routed by the existing Traefik (docker provider, entrypoint websecure, resolver mytlschallenge).
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-n8n_default}
+      - traefik.http.routers.metaflow.rule=Host(`${APP_HOST}`)
+      - traefik.http.routers.metaflow.entrypoints=websecure
+      - traefik.http.routers.metaflow.tls=true
+      - traefik.http.routers.metaflow.tls.certresolver=mytlschallenge
+      - traefik.http.services.metaflow.loadbalancer.server.port=3001
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: metaflow
+      MYSQL_USER: metaflow
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+networks:
+  proxy:
+    name: ${TRAEFIK_NETWORK:-n8n_default}
+    external: true
+
+volumes:
+  app-data:
+  db-data:

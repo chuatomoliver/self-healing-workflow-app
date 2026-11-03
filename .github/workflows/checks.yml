@@ -73,8 +73,8 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
-  # Fast-forwards prod to the commit that just passed. Render watches prod and
-  # redeploys on push; no deploy credentials or app secrets exist in GitHub.
+  # Fast-forwards prod to the commit that just passed. The VPS deploys from prod;
+  # no deploy credentials or app secrets exist in GitHub.
   promote:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [secret-scan, verify]
