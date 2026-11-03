@@ -43,6 +43,8 @@ by the host; `HOST` defaults to `0.0.0.0`. Keep the app port behind the HTTPS pr
 
 Use host environment variables or a private `backend/.env` generated during
 deployment. Never publish that file, put secrets in `VITE_*`, or log its contents.
+For GitHub Secrets, use the [Muse secret handoff](../.github/actions/muse-env/README.md)
+in the tech lead's deployment job; the included manual workflow checks loading only.
 The browser asks for the demo login. Everyone shares workflows and run history;
 this is a single demo workspace, not separate user accounts. Request limits are
 per server process, so run one instance for this demo.
