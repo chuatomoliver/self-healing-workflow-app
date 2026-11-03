@@ -3,10 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
-    "dev": "node --watch src/server.ts --local-database",
-    "start": "node src/server.ts",
+    "dev": "node --env-file-if-exists=.env --watch src/server.ts --local-database",
+    "start": "node --env-file-if-exists=.env src/server.ts",
     "check": "tsc --noEmit",
     "test": "node --test tests/*.test.ts",
     "test:integration": "node scripts/test-integration.ts",
@@ -19,6 +21,18 @@
     "webhook:connection": "node scripts/setup-webhook-connection.ts",
     "db:migrate": "node src/migrate.ts"
   },
-  "dependencies": { "ajv": "^8.20.0", "fastify": "^5.12.7", "mysql2": "^3.24.6" },
-  "devDependencies": { "@types/node": "^24.0.0", "typescript": "~7.0.2" }
+  "dependencies": {
+    "@fastify/rate-limit": "^11.2.2",
+    "@fastify/static": "^10.1.8",
+    "ajv": "^8.20.0",
+    "fastify": "^5.12.7",
+    "mysql2": "^3.24.6"
+  },
+  "overrides": {
+    "@fastify/static": { "glob": "^14.0.3" }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~7.0.2"
+  }
 }

@@ -30,6 +30,28 @@ use Connection options in Plan Workflow to save its webhook once.
 Self-healing proposes missing-field mappings for approval. Validated execution
 setup is reused for later runs of the same saved version.
 
+## Deployment
+
+Use Node.js 24 with HTTPS in front of the backend. From the repository root,
+install with `npm ci`, build with `npm run build`, and start with `npm start`. The backend serves
+`frontend/dist` and `/api` on one domain; page refreshes keep working.
+
+Set `NODE_ENV=production`, `APP_ORIGIN=https://your-domain`, `DATABASE_URL`,
+`MODEL_API_KEY`, `DEMO_USERNAME`, and a unique `DEMO_PASSWORD` (16+ characters).
+The hosted database must exist; tables are migrated at startup. `PORT` is supplied
+by the host; `HOST` defaults to `0.0.0.0`. Keep the app port behind the HTTPS proxy.
+
+Use host environment variables or a private `backend/.env` generated during
+deployment. Never publish that file, put secrets in `VITE_*`, or log its contents.
+The browser asks for the demo login. Everyone shares workflows and run history;
+this is a single demo workspace, not separate user accounts. Request limits are
+per server process, so run one instance for this demo.
+
+Windows-saved Muse/Slack credentials do not transfer. For Slack, provision
+`WEBHOOK_CONNECTIONS_FILE` on persistent private storage and its matching
+`WEBHOOK_SECRET_<reference>` in the host environment; allow `https://hooks.slack.com`
+in `WEBHOOK_ALLOWED_ORIGINS`. The in-app Slack setup currently uses Windows.
+
 ## Checks
 
 ```powershell

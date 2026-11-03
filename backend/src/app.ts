@@ -26,9 +26,12 @@ import type { MusePreparer, WorkflowPreparation } from './muse/preparation.ts'
 import type { ExecutionService } from './execution/service.ts'
 import { executionRoutes } from './execution/routes.ts'
 import type { SlackSetupRequest, SlackSetupResult } from '../../shared/slack.ts'
+import type { HostingConfig } from './config.ts'
+import { protectHostedApp } from './hosting.ts'
+import { serveFrontend } from './frontend.ts'
 
-type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner; prepare?: MusePreparer; connections?: () => Promise<WebhookConnection[]>; hasWebhookCredential?: (reference: string) => Promise<boolean>; webhookDelivery?: WebhookDeliveryService; execution?: ExecutionService; setupSlack?: (input: SlackSetupRequest) => Promise<SlackSetupResult> }
-export function buildApp({ repository, logger = false, port = 3001, parse, plan, prepare, connections = async () => [], hasWebhookCredential = async () => false, webhookDelivery, execution, setupSlack }: AppOptions) {
+type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; hosting?: HostingConfig; frontendRoot?: string; parse?: MuseParser; plan?: MusePlanner; prepare?: MusePreparer; connections?: () => Promise<WebhookConnection[]>; hasWebhookCredential?: (reference: string) => Promise<boolean>; webhookDelivery?: WebhookDeliveryService; execution?: ExecutionService; setupSlack?: (input: SlackSetupRequest) => Promise<SlackSetupResult> }
+export function buildApp({ repository, logger = false, port = 3001, hosting, frontendRoot, parse, plan, prepare, connections = async () => [], hasWebhookCredential = async () => false, webhookDelivery, execution, setupSlack }: AppOptions) {
   const app = Fastify({
     logger: logger ? { level: 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -43,8 +46,10 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan,
   const planWorkflow = plan ?? createMusePlanner({ onResponse: reportMuse })
   const prepareWorkflow = prepare ?? createMusePreparer({ onResponse: reportMuse })
   const allowedOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173'])
+  if (hosting) protectHostedApp(app, hosting)
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store').header('X-Content-Type-Options', 'nosniff')
+    if (hosting) return
     if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(request.headers.host ?? '')) {
       throw new ApiError(403, 'LOCAL_ACCESS_ONLY', 'This development API accepts localhost requests only.')
     }
@@ -71,7 +76,7 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan,
     if (status >= 500) app.log.error({ requestId: request.id, code }, 'Request failed')
     reply.code(status).send({ error: { code, message, requestId: request.id } })
   })
-  app.setNotFoundHandler((request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'This API endpoint could not be found.', requestId: request.id } }))
+  if (!frontendRoot) app.setNotFoundHandler((request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'This API endpoint could not be found.', requestId: request.id } }))
   app.get('/api/health', async () => { await repository.health(); return { status: 'ok' } })
   let parsing = false
   app.get('/api/connections', async () => ({ connections: connectionSummaries(await connections()) }))
@@ -199,5 +204,6 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan,
     } } },
   }, async (request) => ({ delivery: await requireDelivery().deliver(request.params.id, request.params.webhookId, request.body) }))
   executionRoutes(app, execution)
+  if (frontendRoot) serveFrontend(app, frontendRoot)
   return app
 }

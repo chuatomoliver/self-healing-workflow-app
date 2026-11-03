@@ -14,6 +14,11 @@ npm.cmd run dev
 
 Open [Metaflow](http://127.0.0.1:5173). Requests are sent to the backend on port 3001.
 
+For deployment, build and start from the repository root as described in the
+[backend guide](../backend/README.md#deployment). The backend serves this frontend
+and `/api` together, including direct links to canvas and workflow pages.
+No frontend API key or hardcoded production backend URL is needed.
+
 ## How to use it
 
 1. **Describe the process.** Enter a prompt or upload a diagram.
