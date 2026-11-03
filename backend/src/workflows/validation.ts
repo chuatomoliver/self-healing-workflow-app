@@ -62,6 +62,8 @@ export function validateDraft(draft: WorkflowDraft, localReceiverUrl?: string) {
       invalid('Use Slack connection setup to store the secret webhook URL outside the workflow.')
     if (webhook.authentication.type === 'slack-webhook' && (webhook.direction !== 'outgoing' || !webhook.connectionId || webhookAuthenticationIssue(webhook)))
       invalid('Slack delivery requires a saved outgoing Slack connection.')
+    if (webhook.authentication.type === 'stored-webhook' && (webhook.direction !== 'outgoing' || !webhook.connectionId || webhookAuthenticationIssue(webhook)))
+      invalid('Webhook delivery requires a saved outgoing connection.')
     const localReceiver = localReceiverUrl && url.href === localReceiverUrl && url.protocol === 'http:' && url.hostname === '127.0.0.1'
     if ((!localReceiver && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) {
       invalid('Webhook templates require HTTPS without embedded credentials, query strings, or fragments.')

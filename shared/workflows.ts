@@ -39,7 +39,7 @@ export type PlanWebhookTemplate = {
   purpose: string
   suggestionReason: string
   endpoint: { kind: 'managed' | 'external'; urlTemplate: string }
-  authentication: { type: 'signature' | 'secret-header' | 'slack-webhook'; headerName: string; secretRef: string }
+  authentication: { type: 'signature' | 'secret-header' | 'slack-webhook' | 'stored-webhook'; headerName: string; secretRef: string }
   payloadTemplate: Record<string, string>
 }
 export type PlanQuestion = { id: string; stepId: string; question: string; explanation: string; answer?: string }

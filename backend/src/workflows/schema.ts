@@ -12,7 +12,7 @@ const webhookProperties = {
   event: text(200, 1), purpose: text(), suggestionReason: text(),
   endpoint: object({ kind: choice('managed', 'external'), urlTemplate: text(2048, 1) }),
   authentication: object({
-    type: choice('signature', 'secret-header', 'slack-webhook'),
+    type: choice('signature', 'secret-header', 'slack-webhook', 'stored-webhook'),
     headerName: { ...text(100, 1), pattern: '^[A-Za-z0-9-]+$' },
     secretRef: id,
   }),

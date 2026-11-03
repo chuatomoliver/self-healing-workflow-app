@@ -28,6 +28,8 @@ No frontend API key or hardcoded production backend URL is needed.
 
 Simple Slack workflows show a message editor and reuse your saved connection.
 Webhook suggestions can be reviewed before a service is connected.
+Use **Set up connection** on any outgoing webhook card to save a private URL,
+reuse a connection, or add a header token/HMAC secret. Save the draft afterward.
 
 ## Checks
 

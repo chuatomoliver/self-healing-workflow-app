@@ -14,6 +14,7 @@ import { createMuseCompiler, createMuseRepairer } from './muse/execution.ts'
 import { createSlackSetup } from './webhooks/slack.ts'
 import { createExecutionProgramCache } from './execution/program-cache.ts'
 import { fileURLToPath } from 'node:url'
+import { createWebhookSetup } from './webhooks/setup.ts'
 
 let app: ReturnType<typeof buildApp> | undefined
 let pool: ReturnType<typeof createPool> | undefined
@@ -32,7 +33,7 @@ try {
   const execution = createExecutionService({ workflows: repository, runs: mysqlRuns(pool), delivery: webhookDelivery, compile: createMuseCompiler({ ...diagnostics, cache: createExecutionProgramCache() }), repair: createMuseRepairer(diagnostics) })
   await execution.recover()
   app = buildApp({ repository, webhookDelivery, execution, connections: loadConnections, hasWebhookCredential: async (reference) => !!await loadWebhookSecret(reference), setupSlack: createSlackSetup(), logger: config.logLevel !== 'silent', port: config.port,
-    hosting: config.hosting, frontendRoot: config.hosting ? fileURLToPath(new URL('../../frontend/dist/', import.meta.url)) : undefined })
+    hosting: config.hosting, frontendRoot: config.hosting ? fileURLToPath(new URL('../../frontend/dist/', import.meta.url)) : undefined, setupConnection: createWebhookSetup() })
   app.addHook('preClose', async () => { await execution.drain() })
   app.addHook('onClose', async () => { await pool?.end() })
   await app.listen({ port: config.port, host: config.host })

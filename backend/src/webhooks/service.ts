@@ -14,6 +14,7 @@ import type { SavedWorkflow } from '../../../shared/workflows.ts'
 import { validateConnectionBindings } from './connections.ts'
 import { validSlackWebhookUrl } from '../../../shared/slack.ts'
 import { workflowFieldCanonicalizer } from '../../../shared/fieldPaths.ts'
+import { parseStoredWebhook } from './setup.ts'
 
 const reservedHeaders = new Set(['host', 'content-type', 'content-length', 'transfer-encoding', 'connection', 'cookie', 'set-cookie', 'proxy-authorization', 'te', 'trailer', 'upgrade', 'expect', 'keep-alive', 'user-agent', 'x-metaflow-event', 'x-metaflow-delivery-id', 'idempotency-key'])
 function resolveValue(data: Record<string, unknown>, reference: string): unknown {
@@ -55,8 +56,10 @@ export function createWebhookDeliveryService(options: {
         const template = workflow.plan.webhooks.find((item) => item.id === webhookId)
         if (!template) throw new ApiError(404, 'WEBHOOK_NOT_FOUND', 'This webhook could not be found.')
         if (template.direction !== 'outgoing') throw new ApiError(400, 'WEBHOOK_INCOMING_ONLY', 'Incoming webhooks receive events. This action only sends outgoing webhooks.')
-        const slack = template.authentication.type === 'slack-webhook'
-        if (slack && !template.connectionId) throw new ApiError(400, 'WEBHOOK_SETUP_REQUIRED', 'Use a saved Slack connection before sending.')
+        const stored = template.authentication.type === 'stored-webhook'
+        const slackUrl = template.authentication.type === 'slack-webhook'
+        const slack = slackUrl || (stored && new URL(template.endpoint.urlTemplate).hostname === 'hooks.slack.com')
+        if ((slack || stored) && !template.connectionId) throw new ApiError(400, 'WEBHOOK_SETUP_REQUIRED', 'Use a saved connection before sending.')
         if (template.connectionId || template.configuredBy) validateConnectionBindings({ ...workflow.plan, webhooks: [template] }, await options.connections?.() ?? [])
         const step = workflow.plan.steps.find((item) => item.webhookTemplateId === webhookId)
         if (!step || webhookSetupIssues(template).length || webhookMappingsIssue(step, template)) throw new ApiError(400, 'WEBHOOK_SETUP_REQUIRED', 'Review and save the endpoint, authentication, and payload mappings before sending.')
@@ -70,13 +73,22 @@ export function createWebhookDeliveryService(options: {
         if (Buffer.byteLength(body) > 16384) throw new ApiError(413, 'WEBHOOK_PAYLOAD_TOO_LARGE', 'The resolved webhook payload must be at most 16 KB.')
         let secret: string | undefined
         try { secret = await (options.getSecret ?? loadWebhookSecret)(template.authentication.secretRef) } catch { throw new ApiError(503, 'WEBHOOK_SECRET_UNAVAILABLE', 'The backend could not read the referenced webhook credential.') }
-        if (!secret || secret.length > 4096 || (template.authentication.type === 'secret-header' && !/^[\x20-\x7e]+$/.test(secret))) throw new ApiError(400, 'WEBHOOK_SECRET_REQUIRED', 'Configure a valid webhook credential in the backend for this reference.')
-        if (slack && !validSlackWebhookUrl(secret)) throw new ApiError(400, 'WEBHOOK_SECRET_REQUIRED', 'Save a valid Slack incoming webhook URL using Slack connection setup.')
-        // Only a verified saved Slack binding can grant this fixed origin. All
+        if (!secret || secret.length > (stored ? 16384 : 4096) || (template.authentication.type === 'secret-header' && !/^[\x20-\x7e]+$/.test(secret))) throw new ApiError(400, 'WEBHOOK_SECRET_REQUIRED', 'Configure a valid webhook credential in the backend for this reference.')
+        if (slackUrl && !validSlackWebhookUrl(secret)) throw new ApiError(400, 'WEBHOOK_SECRET_REQUIRED', 'Save a valid Slack incoming webhook URL using Slack connection setup.')
+        let privateSettings
+        if (stored) {
+          try {
+            privateSettings = parseStoredWebhook(JSON.parse(secret), options.policy.localReceiverUrl)
+            if (new URL(privateSettings.url).origin !== new URL(template.endpoint.urlTemplate).origin) throw new Error()
+          } catch { throw new ApiError(400, 'WEBHOOK_SECRET_REQUIRED', 'The saved webhook credential is invalid or belongs to another destination.') }
+        }
+        // Only verified saved bindings can grant their catalog origin. All
         // public DNS, pinned-address, TLS, and no-redirect checks still apply.
-        const destination = await pinDestination(slack ? secret : template.endpoint.urlTemplate,
-          slack ? { ...options.policy, allowedOrigins: [...options.policy.allowedOrigins, 'https://hooks.slack.com'] } : options.policy, options.resolve)
-        const authentication = slack ? {} : { [template.authentication.headerName]: template.authentication.type === 'signature' ? `sha256=${createHmac('sha256', secret).update(body).digest('hex')}` : secret }
+        const destination = await pinDestination(privateSettings?.url ?? (slackUrl ? secret : template.endpoint.urlTemplate),
+          slack || stored ? { ...options.policy, allowedOrigins: [...options.policy.allowedOrigins, new URL(template.endpoint.urlTemplate).origin] } : options.policy, options.resolve, stored)
+        const authentication = privateSettings ? privateSettings.mode === 'url' ? {} : {
+          [privateSettings.headerName]: privateSettings.mode === 'signature' ? `sha256=${createHmac('sha256', privateSettings.secret).update(body).digest('hex')}` : privateSettings.secret,
+        } : slackUrl ? {} : { [template.authentication.headerName]: template.authentication.type === 'signature' ? `sha256=${createHmac('sha256', secret).update(body).digest('hex')}` : secret }
         const reserved = await options.deliveries.reserve({ id: input.requestId, workflowId, workflowVersion: input.expectedVersion, webhookId, fingerprint, ...(runId ? { runId } : {}) })
         if (!reserved.created) return reserved.delivery
         const started = Date.now()

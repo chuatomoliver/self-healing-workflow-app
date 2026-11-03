@@ -76,3 +76,14 @@ test('automatic message setup excludes unrelated transformations and retains ren
   bound.steps[2].title = 'Notify team'
   assert.ok(slackWorkflowSteps(bound))
 })
+
+test('the simple Slack message page can reuse a connection created by general webhook setup', () => {
+  const saved: SlackSetupResult = { channel: 'the channel selected in Slack', connection: {
+    id: 'generic-slack', name: 'Saved Slack', description: '', endpointUrl: SLACK_ENDPOINT,
+    authentication: { type: 'stored-webhook', headerName: 'X-Webhook-Reference', secretRef: 'generic-slack' },
+  } }
+  const next = configureSlackWorkflow(slackPlan(), saved, 'Hello team')
+  assert.equal(workflowSetupSummary(next).complete, true)
+  assert.equal(selectSlackConnection(next, [saved])?.connection.id, 'generic-slack')
+  assert.equal(next.webhooks[0].authentication.type, 'stored-webhook')
+})

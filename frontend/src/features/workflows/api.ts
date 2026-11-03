@@ -1,5 +1,6 @@
 import type { ApiErrorResponse, SavedWorkflow, WorkflowDraft, WorkflowSummary } from '../../../../shared/workflows.ts'
 import type { SlackSetupRequest, SlackSetupResult } from '../../../../shared/slack.ts'
+import type { WebhookConnection, WebhookConnectionRequest } from '../../../../shared/connections.ts'
 
 export class WorkflowApiError extends Error {
   status: number
@@ -37,7 +38,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       INVALID_REQUEST: 'Check the workflow fields and limits: title up to 200 characters and description up to 4,000.',
       PAYLOAD_TOO_LARGE: 'This workflow is too large to save. Reduce its size and try again.',
       SLACK_SETUP_INVALID: 'Enter a connection name, a channel such as #general, and a valid Slack incoming webhook URL.',
-      SLACK_CREDENTIAL_UNAVAILABLE: 'Could not save the webhook in Windows Credential Manager. Check the backend runs under your Windows account.',
+      SLACK_CREDENTIAL_UNAVAILABLE: 'Could not save the webhook privately. Check backend credential storage and its permissions.',
+      CONNECTION_SETUP_INVALID: 'Enter a valid webhook URL and authentication settings. Slack uses authentication in its URL.',
+      CONNECTION_CREDENTIAL_UNAVAILABLE: 'Could not save the credential privately. Check backend storage permissions and available space.',
+      CONNECTION_SETUP_UNAVAILABLE: 'Restart or redeploy the backend to enable connection setup.',
       SLACK_CONNECTION_UNAVAILABLE: 'Could not save the Slack connection. Check the saved connections file and its permissions.',
       SLACK_SETUP_UNAVAILABLE: 'Restart the backend to enable Slack setup.',
     }
@@ -50,6 +54,16 @@ export async function listSlackConnections(signal?: AbortSignal) {
   const result = await request<{ connections: SlackSetupResult[] }>('/connections/slack', { signal })
   if (!Array.isArray(result.connections)) throw new WorkflowApiError('Could not read saved Slack connections.', 200, 'INVALID_RESPONSE')
   return result.connections
+}
+export async function listConfiguredConnections(signal?: AbortSignal) {
+  const result = await request<{ connections: WebhookConnection[] }>('/connections/configured', { signal })
+  if (!Array.isArray(result.connections)) throw new WorkflowApiError('Could not read saved connections.', 200, 'INVALID_RESPONSE')
+  return result.connections
+}
+export async function setupWebhookConnection(input: WebhookConnectionRequest) {
+  const result = await request<{ connection: WebhookConnection }>('/connections', { method: 'POST', body: JSON.stringify(input) })
+  if (!result.connection?.id || !result.connection.authentication?.secretRef) throw new WorkflowApiError('Could not read the saved connection.', 200, 'INVALID_RESPONSE')
+  return result.connection
 }
 export async function setupSlackConnection(input: SlackSetupRequest) {
   const result = await request<SlackSetupResult>('/connections/slack', { method: 'POST', body: JSON.stringify(input) })

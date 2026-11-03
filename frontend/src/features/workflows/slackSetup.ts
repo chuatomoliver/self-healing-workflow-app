@@ -1,5 +1,6 @@
 import type { WorkflowPlan, PlanWebhookTemplate } from '../../../../shared/workflows.ts'
 import type { SlackSetupResult } from '../../../../shared/slack.ts'
+import { SLACK_ENDPOINT } from '../../../../shared/slack.ts'
 import { refreshPlanChecks, stepSetupIssues } from '../../../../shared/setup.ts'
 
 export function slackWorkflowSteps(plan: WorkflowPlan) {
@@ -38,7 +39,8 @@ export function setSlackMessage(plan: WorkflowPlan, text: string): WorkflowPlan 
 
 export function configureSlackWorkflow(plan: WorkflowPlan, saved: SlackSetupResult, text: string): WorkflowPlan {
   const steps = slackWorkflowSteps(plan)
-  if (!steps || !text.trim() || text.length > 4000 || saved.connection.authentication.type !== 'slack-webhook')
+  if (!steps || !text.trim() || text.length > 4000 || (saved.connection.authentication.type !== 'slack-webhook'
+    && !(saved.connection.authentication.type === 'stored-webhook' && saved.connection.endpointUrl === SLACK_ENDPOINT)))
     throw new Error('Slack setup requires a manual trigger, a message step, and a Slack action.')
   const next = structuredClone(setSlackMessage(plan, text))
   next.structureReviewed = true

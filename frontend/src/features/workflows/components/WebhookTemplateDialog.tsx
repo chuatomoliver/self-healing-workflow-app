@@ -14,9 +14,12 @@ export function WebhookTemplateDialog({ template, onUpdate, onClose }: { templat
   const authIssue = webhookAuthenticationIssue(candidate)
   const payloadIssue = webhookPayloadIssue(candidate)
   const setup = value.setup ?? { endpointReviewed: false, authenticationReviewed: false, payloadReviewed: false }
-  const slack = template.authentication.type === 'slack-webhook'
+  const savedDestination = template.authentication.type === 'slack-webhook' || template.authentication.type === 'stored-webhook'
   function update(patch: Partial<PlanWebhookTemplate>) {
-    setValue((current) => ({ ...current, ...patch, configuredBy: undefined, connectionId: undefined, setup: { endpointReviewed: false, authenticationReviewed: false, payloadReviewed: false } }))
+    setValue((current) => ({ ...current, ...patch, configuredBy: undefined,
+      connectionId: patch.endpoint || patch.authentication ? undefined : current.connectionId,
+      setup: { endpointReviewed: patch.endpoint ? false : current.setup?.endpointReviewed ?? false,
+        authenticationReviewed: patch.authentication ? false : current.setup?.authenticationReviewed ?? false, payloadReviewed: false } }))
     setError('')
   }
   return <Dialog open title={`Set up ${template.name}`} onClose={onClose}>
@@ -35,12 +38,12 @@ export function WebhookTemplateDialog({ template, onUpdate, onClose }: { templat
       <p className="mt-3 text-[10px] font-medium uppercase text-accent">{value.direction} · {value.method}</p>
       <label className="mt-3 block text-[11px] font-medium">Event name<input className={setupInput} value={value.event} maxLength={200} required onChange={(event) => update({ event: event.target.value })} /></label>
       <label className="mt-3 block text-[11px] font-medium">Purpose<textarea className={setupInput} rows={2} value={value.purpose} maxLength={4000} onChange={(event) => update({ purpose: event.target.value })} /></label>
-      <label className="mt-4 block text-[11px] font-medium">{value.direction === 'incoming' ? 'Planned receiving address' : 'Destination address'}<input className={setupInput} type="url" value={value.endpoint.urlTemplate} disabled={slack} maxLength={2048} required onChange={(event) => update({ endpoint: { ...value.endpoint, urlTemplate: event.target.value } })} /></label>
-      {slack && <p className="mt-2 text-[10px] leading-relaxed text-muted">The secret destination is stored securely on the backend. Use Set up Slack in the workflow summary to change the connection.</p>}
+      <label className="mt-4 block text-[11px] font-medium">{value.direction === 'incoming' ? 'Planned receiving address' : 'Destination address'}<input className={setupInput} type="url" value={value.endpoint.urlTemplate} disabled={savedDestination} maxLength={2048} required onChange={(event) => update({ endpoint: { ...value.endpoint, urlTemplate: event.target.value } })} /></label>
+      {value.direction === 'outgoing' && <p className="mt-2 text-[10px] leading-relaxed text-muted">Use Set up connection on the webhook card for the full destination URL and credentials. This form reviews the event and payload.</p>}
       {endpointIssue && <p className="mt-2 text-[10px] text-amber-800">{endpointIssue}</p>}
       <label className="mt-2 flex items-start gap-2 text-[11px]"><input type="checkbox" disabled={!!endpointIssue} checked={setup.endpointReviewed} onChange={(event) => setValue((current) => ({ ...current, setup: { ...setup, endpointReviewed: event.target.checked } }))} />I reviewed this endpoint address.</label>
       <fieldset className="mt-5 border-t border-line pt-4"><legend className="text-xs font-semibold">Authentication reference</legend>
-        {slack ? <p className="mt-2 text-[11px] text-muted">Saved Slack webhook. No authentication header is required.</p> : <>
+        {savedDestination ? <p className="mt-2 text-[11px] text-muted">Authentication is managed by the saved connection.</p> : <>
         <label className="mt-2 block text-[11px]">Method<select className={setupInput} value={value.authentication.type} onChange={(event) => update({ authentication: { ...value.authentication, type: event.target.value as 'signature' | 'secret-header' } })}><option value="signature">Signature verification</option><option value="secret-header">Secret header</option></select></label>
         <label className="mt-3 block text-[11px]">Header name<input className={setupInput} value={value.authentication.headerName} maxLength={100} onChange={(event) => update({ authentication: { ...value.authentication, headerName: event.target.value } })} /></label>
         <label className="mt-3 block text-[11px]">Credential reference name<input className={setupInput} value={value.authentication.secretRef} maxLength={120} onChange={(event) => update({ authentication: { ...value.authentication, secretRef: event.target.value } })} /></label>

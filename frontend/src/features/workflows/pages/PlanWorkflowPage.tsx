@@ -19,6 +19,8 @@ import { refreshPlanChecks, webhookSetupIssues, workflowSetupSummary } from '../
 import type { PlanStep, PlanWebhookTemplate, WorkflowPlan } from '../types'
 import type { SavedWorkflow } from '../../../../../shared/workflows.ts'
 import { isConnectionSetupQuestion } from '../../../../../shared/webhookSuggestions.ts'
+import { ConnectionSetupDialog } from '../components/ConnectionSetupDialog'
+import { connectWebhook } from '../connectionSetup'
 
 export type PlanWorkflowPageProps = { plan: WorkflowPlan; prompt: string; sourceFile: File | null; storage: ReactNode; onChangePlan: (plan: WorkflowPlan, message: string) => void; onContinue: () => void; planning: boolean; onGeneratePlan: () => void; onCancelPlanning: () => void; planError: string; saved: SavedWorkflow | null; canDeliver: boolean }
 export function PlanWorkflowPage(props: PlanWorkflowPageProps) {
@@ -34,6 +36,7 @@ function DetailedPlanWorkflowPage({ plan, prompt, sourceFile, storage, onChangeP
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null)
   const [managingDraft, setManagingDraft] = useState(false)
   const [settingUpSlack, setSettingUpSlack] = useState(false)
+  const [connectingWebhook, setConnectingWebhook] = useState<string | null>(null)
   const detailsRef = useRef<HTMLElement>(null)
   const selected = plan.steps.find((step) => step.id === selectedId) ?? plan.steps[0]
   const summary = workflowSetupSummary(plan)
@@ -42,6 +45,7 @@ function DetailedPlanWorkflowPage({ plan, prompt, sourceFile, storage, onChangeP
   const identifiedConnections = plan.webhooks.length > summary.configuredWebhooks && summary.configuredSteps === plan.steps.length && !openQuestions
   const stepToEdit = plan.steps.find((step) => step.id === editingStep)
   const webhookToEdit = plan.webhooks.find((webhook) => webhook.id === editingWebhook)
+  const webhookToConnect = plan.webhooks.find((webhook) => webhook.id === connectingWebhook)
   const questionToEdit = plan.questions.find((question) => question.id === editingQuestion)
   const branchCount = plan.steps.reduce((count, step) => {
     const paths = plan.edges.filter((edge) => edge.source === step.id)
@@ -89,7 +93,7 @@ function DetailedPlanWorkflowPage({ plan, prompt, sourceFile, storage, onChangeP
       {(sourceFile || prompt.trim()) && <details className="mt-4 border-t border-line pt-3"><summary className="cursor-pointer text-[11px] font-medium text-muted">Your original input</summary>{sourceFile && <p className="mt-3 flex items-center gap-2 text-[11px] text-muted"><Icon name="file" width="14" height="14" />{sourceFile.name}</p>}{prompt.trim() && <p className="mt-2 text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere text-muted">{prompt}</p>}</details>}
       {slackWorkflowSteps(plan) && <div className="mt-4 rounded-lg border border-line bg-slate-50 p-4"><h3 className="text-xs font-semibold">Slack connection</h3><p className="mt-2 text-[11px] leading-relaxed text-muted">Choose a saved Slack webhook or add one, and set your message in one place.</p><Button className="mt-3" variant="secondary" size="compact" disabled={planning} onClick={() => setSettingUpSlack(true)}>Set up Slack</Button></div>}
     </section>
-    <PlanWebhooks templates={plan.webhooks} steps={plan.steps} saved={saved} canDeliver={canDeliver && !planning} onReview={(webhook) => { if (!planning) setEditingWebhook(webhook.id) }} />
+    <PlanWebhooks templates={plan.webhooks} steps={plan.steps} saved={saved} connectingDisabled={planning} canDeliver={canDeliver && !planning} onConnect={(webhook) => setConnectingWebhook(webhook.id)} onReview={(webhook) => { if (!planning) setEditingWebhook(webhook.id) }} />
     <div className="mt-5 grid items-start gap-5 lg:grid-cols-[0.85fr_1.15fr]"><PlanStepList steps={plan.steps} selectedStepId={selected?.id ?? null} onSelectStep={setSelectedId} />
       {selected ? <PlanStepDetails step={selected} plan={plan} containerRef={detailsRef} webhookConnections={{}} onReviewWebhook={(webhook) => { if (!planning) setEditingWebhook(webhook.id) }} onEdit={() => setEditingStep(selected.id)} editingDisabled={planning} /> : <section className="rounded-xl border border-line bg-surface p-6 text-xs text-muted">Step configuration will appear here.</section>}
     </div>
@@ -109,6 +113,10 @@ function DetailedPlanWorkflowPage({ plan, prompt, sourceFile, storage, onChangeP
     <WorkflowPageFooter step={3} label="PLAN WORKFLOW" />
     {managingDraft && <Dialog open title="Save & manage drafts" onClose={() => setManagingDraft(false)}>{storage}</Dialog>}
     {!planning && settingUpSlack && <SlackSetupDialog plan={plan} onClose={() => setSettingUpSlack(false)} onApply={(next) => { onChangePlan(next, 'Configured Slack delivery. Save the draft before running.'); setSettingUpSlack(false) }} />}
+    {!planning && webhookToConnect && <ConnectionSetupDialog key={webhookToConnect.id} template={webhookToConnect} onClose={() => setConnectingWebhook(null)} onConnected={(connection) => {
+      onChangePlan(connectWebhook(plan, webhookToConnect.id, connection), 'Connected webhook. Save the draft before running.')
+      setConnectingWebhook(null)
+    }} />}
     {!planning && stepToEdit && <StepSetupDialog key={stepToEdit.id} step={stepToEdit} onApply={applyStep} onClose={() => setEditingStep(null)} />}
     {!planning && webhookToEdit && <WebhookTemplateDialog key={webhookToEdit.id} template={webhookToEdit} onUpdate={applyWebhook} onClose={() => setEditingWebhook(null)} />}
     {!planning && questionToEdit && <Dialog open title={questionToEdit.question} onClose={() => setEditingQuestion(null)}><p className="text-xs leading-relaxed text-muted">{questionToEdit.explanation}</p><label className="mt-4 block text-xs font-medium">Your answer<textarea className={setupInput} rows={4} maxLength={4000} value={questionToEdit.answer ?? ''} onChange={(event) => onChangePlan({ ...plan, questions: plan.questions.map((question) => question.id === questionToEdit.id ? { ...question, answer: event.target.value } : question), steps: plan.steps.map((step) => step.id === questionToEdit.stepId ? { ...step, reviewed: false, configuredBy: undefined } : step) }, '')} /></label><Button className="mt-4" onClick={() => setEditingQuestion(null)}>Done</Button></Dialog>}
