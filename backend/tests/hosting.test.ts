@@ -31,6 +31,17 @@ test('hosted access requires a login, allows the configured domain, and rejects 
   assert.equal((await app.inject({ url: '/api/health', headers: { host: headers.host } })).statusCode, 200)
 })
 
+test('with the login disabled, requests need no credentials but host, origin, and API limits still apply', async (t) => {
+  const app = buildApp({ repository, hosting: { ...hosting, username: '', password: '', open: true } })
+  t.after(() => app.close())
+  assert.equal((await app.inject({ url: '/api/workflows', headers: { host: headers.host } })).statusCode, 200)
+  for (const override of [{ host: 'attacker.example' }, { origin: 'https://attacker.example' }, { 'sec-fetch-site': 'cross-site' }]) {
+    assert.equal((await app.inject({ url: '/api/workflows', headers: { host: headers.host, ...override } })).statusCode, 403)
+  }
+  for (let i = 0; i < 30; i++) assert.equal((await app.inject({ method: 'POST', url: '/api/parse', headers: { host: headers.host }, payload: {} })).statusCode, 400)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/parse', headers: { host: headers.host }, payload: {} })).statusCode, 429)
+})
+
 test('browser refreshes serve the frontend while API failures, missing assets, and secret files stay private', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'metaflow-hosting-'))
   const root = join(directory, 'dist')

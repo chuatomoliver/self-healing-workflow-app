@@ -51,3 +51,12 @@ test('production requires an HTTPS origin and demo login and never creates a loc
   assert.throws(() => readConfig({ ...base, HOST: '0.0.0.0' }))
   assert.equal(readConfig(base).host, '127.0.0.1')
 })
+
+test('the login can only be turned off explicitly, and still needs an HTTPS origin', () => {
+  const open = { ...base, NODE_ENV: 'production', APP_ORIGIN: 'https://demo.example', DEMO_AUTH: 'disabled' }
+  assert.equal(readConfig(open).hosting?.open, true)
+  assert.equal(readConfig({ ...deployed, DEMO_AUTH: 'enabled' }).hosting?.open, undefined)
+  assert.throws(() => readConfig({ ...open, DEMO_AUTH: 'off' }))
+  assert.throws(() => readConfig({ ...open, APP_ORIGIN: 'http://demo.example' }))
+  assert.throws(() => readConfig({ ...base, NODE_ENV: 'production', APP_ORIGIN: 'https://demo.example' }))
+})

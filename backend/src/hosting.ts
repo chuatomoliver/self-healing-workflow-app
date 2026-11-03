@@ -47,7 +47,7 @@ export function protectHostedApp(app: FastifyInstance, hosting: HostingConfig) {
     }
     // Health exposes no configuration or user data and supports hosting probes.
     if ((request.method === 'GET' || request.method === 'HEAD') && pathname === '/api/health') return
-    if (!timingSafeEqual(digest(request.headers.authorization ?? ''), expected)) {
+    if (!hosting.open && !timingSafeEqual(digest(request.headers.authorization ?? ''), expected)) {
       await enforce(loginLimit, request, reply)
       reply.header('WWW-Authenticate', 'Basic realm="Metaflow demo", charset="UTF-8"')
       throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Sign in to access this demo workspace.')

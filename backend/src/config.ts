@@ -1,4 +1,4 @@
-export type HostingConfig = { origin: string; username: string; password: string }
+export type HostingConfig = { origin: string; username: string; password: string; open?: boolean }
 export type Config = { port: number; host: string; hosting?: HostingConfig; databaseUrl: string; databaseSsl: boolean; localDatabase: boolean; logLevel: 'info' | 'silent' }
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env, options: { localDatabase?: boolean } = {}): Config {
@@ -15,12 +15,18 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, options: { loca
       origin = new URL(env.APP_ORIGIN ?? '')
       if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error()
     } catch { throw new Error('Set APP_ORIGIN to the public HTTPS origin, without a path or credentials.') }
-    const username = env.DEMO_USERNAME ?? ''
-    const password = env.DEMO_PASSWORD ?? ''
-    if (!/^[A-Za-z0-9_.-]{1,80}$/.test(username) || password.length < 16 || password.length > 256 || /[\r\n\x00]/.test(password)) {
-      throw new Error('Production requires DEMO_USERNAME and a DEMO_PASSWORD of 16–256 characters.')
+    if (env.DEMO_AUTH && !['enabled', 'disabled'].includes(env.DEMO_AUTH)) throw new Error('DEMO_AUTH must be enabled or disabled.')
+    if (env.DEMO_AUTH === 'disabled') {
+      // Explicit opt-out only; host checks and request limits still apply.
+      hosting = { origin: origin.origin, username: '', password: '', open: true }
+    } else {
+      const username = env.DEMO_USERNAME ?? ''
+      const password = env.DEMO_PASSWORD ?? ''
+      if (!/^[A-Za-z0-9_.-]{1,80}$/.test(username) || password.length < 16 || password.length > 256 || /[\r\n\x00]/.test(password)) {
+        throw new Error('Production requires DEMO_USERNAME and a DEMO_PASSWORD of 16–256 characters.')
+      }
+      hosting = { origin: origin.origin, username, password }
     }
-    hosting = { origin: origin.origin, username, password }
   }
   const host = env.HOST || (production ? '0.0.0.0' : '127.0.0.1')
   if (!production && !['127.0.0.1', '::1', 'localhost'].includes(host)) throw new Error('Remote listening requires NODE_ENV=production and demo authentication.')
