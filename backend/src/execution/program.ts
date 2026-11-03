@@ -2,6 +2,7 @@ import { Ajv } from 'ajv'
 import type { Condition, ExecutionProgram, RunData, Scalar } from '../../../shared/execution.ts'
 import type { SavedWorkflow } from '../../../shared/workflows.ts'
 import { ApiError } from '../errors.ts'
+import { workflowFieldCanonicalizer } from '../../../shared/fieldPaths.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = (maxLength = 1000) => ({ type: 'string', maxLength })
@@ -70,23 +71,13 @@ export function evaluateCondition(data: RunData, rule: Condition): boolean {
   return rule.operator === 'gte' ? value >= rule.value : rule.operator === 'gt' ? value > rule.value : rule.operator === 'lte' ? value <= rule.value : value < rule.value
 }
 export function parseProgram(output: unknown, workflow: SavedWorkflow): ExecutionProgram {
-  const invalid = () => new ApiError(502, 'MUSE_INVALID_PROGRAM', 'Muse could not prepare a consistent executable workflow. No steps were run.')
+  const invalid = (reason = 'Muse could not prepare a consistent executable workflow.') => new ApiError(502, 'MUSE_INVALID_PROGRAM', `${reason} No steps were run.`)
   if (!validate(output)) throw invalid()
   const program = structuredClone(output) as ExecutionProgram
   // Some providers add an expression-root or node namespace. Resolve it only
   // when the saved field contract proves the exact canonical path, without
   // renaming real source-data fields or guessing values.
-  const known = new Set([
-    ...workflow.plan.steps.flatMap((step) => [...step.inputs, ...step.outputs].map((field) => field.name)),
-    ...workflow.plan.webhooks.flatMap((hook) => Object.values(hook.payloadTemplate).map((reference) => reference.slice(2, -2))),
-  ])
-  const namespaces = new Set(['data', 'context', ...workflow.plan.steps.map((step) => step.id)])
-  const canonical = (path: string) => {
-    const separator = path.indexOf('.')
-    if (known.has(path) || separator < 0 || !namespaces.has(path.slice(0, separator))) return path
-    const candidate = path.slice(separator + 1)
-    return known.has(candidate) ? candidate : path
-  }
+  const canonical = workflowFieldCanonicalizer(workflow.plan)
   for (const step of program.steps) {
     step.requiredPaths = step.requiredPaths.map(canonical)
     step.validPath = canonical(step.validPath); step.errorsPath = canonical(step.errorsPath)
@@ -106,9 +97,18 @@ export function parseProgram(output: unknown, workflow: SavedWorkflow): Executio
   for (const executable of program.steps) {
     const original = steps.find((step) => step.id === executable.stepId)
     if (!original) throw invalid()
-    const allowed = { trigger: ['input'], transform: ['validate', 'assign'], decision: ['branch'], action: ['webhook'] }
+    const outgoing = workflow.plan.edges.filter((edge) => edge.source === original.id)
+    const inlineDecision = original.role === 'decision' && outgoing.length === 1 && original.outputs.length > 0
+    const allowed = { trigger: ['input'], transform: ['validate', 'assign'], decision: inlineDecision ? ['validate', 'assign'] : ['branch'], action: ['webhook'] }
     if (executable.kind === 'unsupported') throw new ApiError(400, 'EXECUTION_UNSUPPORTED', 'One or more steps require a connector or operation that this runner does not support. Review the workflow before running.')
-    if (!allowed[original.role].includes(executable.kind)) throw invalid()
+    if (!allowed[original.role].includes(executable.kind)) throw invalid('An executable operation does not match its saved step and outgoing paths.')
+    // A straight-line classification stores a result; it cannot secretly become
+    // a route or a new arbitrary action. Genuine branches still need two paths.
+    if (inlineDecision && executable.kind === 'assign' && executable.assignments.some((assignment) => assignment.kind !== 'choose'
+      || !original.outputs.some((field) => canonical(field.name) === assignment.target)))
+      throw invalid('A single-path decision must assign a declared output using its condition.')
+    if (inlineDecision && executable.kind === 'validate' && !original.outputs.some((field) => canonical(field.name) === executable.validPath))
+      throw invalid('A single-path validation must store its declared validation result.')
     executable.requiredPaths.forEach(path)
     if (executable.kind === 'input' && roots[0].id !== executable.stepId) throw invalid()
     if (executable.kind === 'validate') {
@@ -130,10 +130,9 @@ export function parseProgram(output: unknown, workflow: SavedWorkflow): Executio
         }
       }
     }
-    const outgoing = workflow.plan.edges.filter((edge) => edge.source === original.id)
     if (executable.kind === 'branch') {
       conditionPath(executable.condition)
-      if (outgoing.length !== 2 || executable.trueTarget === executable.falseTarget || !outgoing.some((edge) => edge.target === executable.trueTarget) || !outgoing.some((edge) => edge.target === executable.falseTarget)) throw invalid()
+      if (outgoing.length !== 2 || executable.trueTarget === executable.falseTarget || !outgoing.some((edge) => edge.target === executable.trueTarget) || !outgoing.some((edge) => edge.target === executable.falseTarget)) throw invalid('A branching decision requires two distinct saved successor paths.')
     } else if (outgoing.length > 1) throw new ApiError(400, 'EXECUTION_UNSUPPORTED', 'Use a decision step for branching. Parallel side-effect execution is not supported yet.')
     if (executable.kind === 'webhook' && !workflow.plan.webhooks.some((hook) => hook.id === original.webhookTemplateId && hook.direction === 'outgoing')) throw invalid()
   }

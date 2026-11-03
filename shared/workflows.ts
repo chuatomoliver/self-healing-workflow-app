@@ -29,6 +29,7 @@ export type PlanWebhookTemplate = {
   suggestedBy?: 'muse'
   configuredBy?: 'muse'
   connectionId?: string
+  availability?: 'connection-needed' | 'credential-needed' | 'receiver-needed'
   setup?: { endpointReviewed: boolean; authenticationReviewed: boolean; payloadReviewed: boolean }
   id: string
   name: string
@@ -38,7 +39,7 @@ export type PlanWebhookTemplate = {
   purpose: string
   suggestionReason: string
   endpoint: { kind: 'managed' | 'external'; urlTemplate: string }
-  authentication: { type: 'signature' | 'secret-header'; headerName: string; secretRef: string }
+  authentication: { type: 'signature' | 'secret-header' | 'slack-webhook'; headerName: string; secretRef: string }
   payloadTemplate: Record<string, string>
 }
 export type PlanQuestion = { id: string; stepId: string; question: string; explanation: string; answer?: string }

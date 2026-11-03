@@ -10,7 +10,7 @@ import { parseWorkflow } from './features/diagram-parsing/api'
 import { generateWorkflowPlan } from './features/workflows/planningApi'
 import { WorkflowStorage } from './features/workflows/components/WorkflowStorage'
 import { WorkflowEmptyState } from './features/workflows/components/WorkflowEmptyState'
-import { getWorkflow } from './features/workflows/api'
+import { getWorkflow, saveWorkflow } from './features/workflows/api'
 import type { WorkflowActivity } from './features/history/activity'
 import type { ParsedDiagram, SavedWorkflow, WorkflowDraft, WorkflowPlan } from '../../shared/workflows'
 import { refreshPlanChecks } from '../../shared/setup'
@@ -22,6 +22,13 @@ const RunCanvasPage = lazy(() => import('./features/canvas/pages/RunCanvasPage')
 const SelfHealPage = lazy(() => import('./features/healing/pages/SelfHealPage').then((module) => ({ default: module.SelfHealPage })))
 const ContextLogsPage = lazy(() => import('./features/history/pages/ContextLogsPage').then((module) => ({ default: module.ContextLogsPage })))
 type RecordActivity = (kind: WorkflowActivity['kind'], workflow: string, message: string, status?: WorkflowActivity['status']) => void
+
+function diagramWithPlan(diagram: ParsedDiagram, plan: WorkflowPlan): ParsedDiagram {
+  return { ...diagram, title: plan.title, nodes: diagram.nodes.map((node) => {
+    const step = plan.steps.find((item) => item.id === node.id)
+    return step ? { ...node, label: step.title, description: step.description } : node
+  }) }
+}
 
 function App() {
   const navigate = useNavigate()
@@ -98,10 +105,7 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
   }
   function applyPlan(next: WorkflowPlan) {
     setPlan(refreshPlanChecks(next))
-    setDiagram((current) => current ? { ...current, title: next.title, nodes: current.nodes.map((node) => {
-      const step = next.steps.find((item) => item.id === node.id)
-      return step ? { ...node, label: step.title, description: step.description } : node
-    }) } : current)
+    setDiagram((current) => current ? diagramWithPlan(current, next) : current)
   }
   async function startParse() {
     if (parseRequest.current) return
@@ -141,13 +145,28 @@ function WorkflowWorkspace({ initialWorkflow, initialDraft, initialFile, onParse
       return position && Number.isFinite(position.x) && Number.isFinite(position.y) ? { ...node, position: { x: Math.max(-100000, Math.min(100000, position.x)), y: Math.max(-100000, Math.min(100000, position.y)) } } : node
     }) })
   }
-  const storage = <WorkflowStorage draft={currentDraft} saved={savedWorkflow} onSaved={(workflow) => { setSavedWorkflow(workflow); record('save', workflow.plan.title, `Saved draft version ${workflow.version}.`); navigate(`${workflowRoutes.plan}?workflow=${encodeURIComponent(workflow.id)}`, { replace: true }) }} onOpen={onOpen} onRename={(title) => { if (plan) changePlan({ ...plan, title }, '') }} />
+  function didSave(workflow: SavedWorkflow) {
+    setSavedWorkflow(workflow)
+    record('save', workflow.plan.title, `Saved draft version ${workflow.version}.`)
+    const params = new URLSearchParams(search)
+    params.set('workflow', workflow.id)
+    navigate({ pathname, search: `?${params.toString()}` }, { replace: true })
+  }
+  async function saveCanvasDraft() {
+    if (!currentDraft) throw new Error('Open a workflow before saving.')
+    didSave(await saveWorkflow(currentDraft, savedWorkflow))
+  }
+  function buildOnCanvas() {
+    if (!currentDraft || !savedWorkflow || isWorkflowDirty(currentDraft, savedWorkflow)) return
+    navigate(`${workflowRoutes.canvas}?workflow=${encodeURIComponent(savedWorkflow.id)}`)
+  }
+  const storage = <WorkflowStorage draft={currentDraft} saved={savedWorkflow} onSaved={didSave} onOpen={onOpen} onRename={(title) => { if (plan) changePlan({ ...plan, title }, '') }} />
   const noWorkflow = (title: string) => <WorkflowEmptyState title={title} description="Your workflow will appear here after parsing. You can also open a saved draft in Plan Workflow." />
   return <AppLayout><Suspense fallback={<p role="status" className="py-12 text-xs text-muted">Loading workflow page…</p>}><Routes>
     <Route path={workflowRoutes.describe} element={<DescribeUploadPage draft={input} onContinue={() => { void startParse() }} />} />
     <Route path={workflowRoutes.parse} element={parsing || parseError ? <section className="my-12 rounded-xl border border-line bg-surface p-6" aria-busy={parsing}><h1 className="text-xl font-semibold">{parsing ? 'Preparing your workflow with Muse…' : 'Parsing needs attention'}</h1>{parsing ? <p role="status" className="mt-3 text-xs text-muted">Building the steps and configuring their setup in one request. This can take up to 90 seconds.</p> : <p role="alert" className="mt-3 text-xs leading-relaxed text-danger">{parseError}</p>}<div className="mt-5 flex gap-3">{!parsing && <Button onClick={() => { void startParse() }}>Try again</Button>}<Button variant="secondary" onClick={() => { parseRequest.current?.abort(); if (parsing) record('parse', plan?.title ?? 'New workflow', 'Cancelled parsing. The request may already have reached Muse.', 'cancelled'); navigate(workflowRoutes.describe) }}>{parsing ? 'Cancel' : 'Back to input'}</Button></div></section> : diagram && plan ? <ParseDiagramPage result={diagram} sourceFile={input.diagram} sourceUrl={input.previewUrl} prompt={input.prompt} onContinue={() => { changePlan({ ...plan, structureReviewed: true }, 'Reviewed the workflow structure.'); navigate(workflowRoutes.plan) }} /> : noWorkflow('No workflow to review yet')} />
-    <Route path={workflowRoutes.plan} element={plan && diagram ? <PlanWorkflowPage plan={plan} prompt={input.prompt} sourceFile={input.diagram} storage={storage} onChangePlan={changePlan} planning={planning} planError={planError} saved={savedWorkflow} canDeliver={!!currentDraft && !isWorkflowDirty(currentDraft, savedWorkflow)} onGeneratePlan={() => { void startPlanning() }} onCancelPlanning={() => { planRequest.current?.abort(); record('plan', plan.title, 'Cancelled detailed planning. The request may already have reached Muse.', 'cancelled') }} onContinue={() => navigate(workflowRoutes.canvas)} /> : <>{noWorkflow('Create or open a workflow')}{storage}</>} />
-    <Route path={workflowRoutes.canvas} element={plan && diagram ? <RunCanvasPage plan={plan} diagram={diagram} saved={savedWorkflow} canRun={!!currentDraft && !!savedWorkflow && !isWorkflowDirty(currentDraft, savedWorkflow)} execution={execution} onRenameStep={renameStep} onMoveSteps={moveSteps} onEditSetup={() => navigate(workflowRoutes.plan)} /> : noWorkflow('Your workflow canvas is empty')} />
+    <Route path={workflowRoutes.plan} element={plan && diagram ? <PlanWorkflowPage plan={plan} prompt={input.prompt} sourceFile={input.diagram} storage={storage} onChangePlan={changePlan} planning={planning} planError={planError} saved={savedWorkflow} canDeliver={!!currentDraft && !isWorkflowDirty(currentDraft, savedWorkflow)} onGeneratePlan={() => { void startPlanning() }} onCancelPlanning={() => { planRequest.current?.abort(); record('plan', plan.title, 'Cancelled detailed planning. The request may already have reached Muse.', 'cancelled') }} onContinue={buildOnCanvas} /> : <>{noWorkflow('Create or open a workflow')}{storage}</>} />
+    <Route path={workflowRoutes.canvas} element={plan && diagram ? <RunCanvasPage plan={plan} diagram={diagram} saved={savedWorkflow} canRun={!!currentDraft && !!savedWorkflow && !isWorkflowDirty(currentDraft, savedWorkflow)} execution={execution} onSave={saveCanvasDraft} onRenameStep={renameStep} onMoveSteps={moveSteps} onEditSetup={() => navigate(workflowRoutes.plan)} /> : noWorkflow('Your workflow canvas is empty')} />
     <Route path={workflowRoutes.heal} element={<SelfHealPage plan={plan} execution={execution} />} />
     <Route path={workflowRoutes.logs} element={<ContextLogsPage plan={plan} activities={activities} execution={execution} />} />
     <Route path="*" element={<Navigate to={workflowRoutes.describe} replace />} />

@@ -7,6 +7,7 @@ export type WebhookConnection = {
   description: string
   endpointUrl: string
   authentication: PlanWebhookTemplate['authentication']
+  slackChannel?: string
 }
 export type ConnectionSummary = Pick<WebhookConnection, 'id' | 'name' | 'description'>
 export const connectionSummaries = (connections: WebhookConnection[]): ConnectionSummary[] =>
