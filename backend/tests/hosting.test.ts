@@ -59,6 +59,18 @@ test('browser refreshes serve the frontend while API failures, missing assets, a
     assert.ok(!/demo shell|DO_NOT_SERVE|OUTSIDE_DIST/.test(response.body), url)
   }
   assert.equal((await app.inject({ method: 'POST', url: '/plan-workflow', headers })).statusCode, 404)
+
+  const shared = { ...headers, accept: 'text/html', 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
+  assert.equal((await app.inject({ url: '/?fbclid=abc', headers: shared })).statusCode, 200)
+  assert.equal((await app.inject({ url: '/', headers: { ...shared, authorization: 'Basic wrong' } })).statusCode, 401)
+  const blockedLinks: { method: 'GET' | 'POST'; url: string; headers?: Record<string, string> }[] = [
+    { method: 'GET', url: '/api/workflows' }, { method: 'POST', url: '/' },
+    { method: 'GET', url: '/', headers: { 'sec-fetch-dest': 'iframe' } }, { method: 'GET', url: '/', headers: { 'sec-fetch-mode': 'no-cors' } },
+    { method: 'GET', url: '/assets/app.js', headers: { 'sec-fetch-dest': 'script', 'sec-fetch-mode': 'no-cors' } },
+  ]
+  for (const { method, url, headers: extra } of blockedLinks) {
+    assert.equal((await app.inject({ method, url, headers: { ...shared, ...extra } })).statusCode, 403, `${method} ${url}`)
+  }
 })
 
 test('hosted login and write attempts have bounded request rates without invoking AI', async (t) => {

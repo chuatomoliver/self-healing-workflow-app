@@ -34,12 +34,17 @@ export function protectHostedApp(app: FastifyInstance, hosting: HostingConfig) {
     if (request.headers.host !== host && !/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(request.headers.host ?? '')) {
       throw new ApiError(403, 'HOST_NOT_ALLOWED', 'This request host is not allowed.')
     }
-    if ((request.headers.origin && request.headers.origin !== hosting.origin) || request.headers['sec-fetch-site'] === 'cross-site') {
-      throw new ApiError(403, 'ORIGIN_NOT_ALLOWED', 'This request origin is not allowed.')
-    }
     let pathname: string
     try { pathname = decodeURIComponent(request.url.split('?')[0]) }
     catch { throw new ApiError(400, 'INVALID_PATH', 'Invalid request path.') }
+    const isApi = pathname === '/api' || pathname.startsWith('/api/')
+    // Opening the page from another site (a shared link) is allowed; it still needs the login
+    // and cannot be framed or read by that site. Everything else cross-site stays blocked.
+    const linkedNavigation = !isApi && (request.method === 'GET' || request.method === 'HEAD')
+      && request.headers['sec-fetch-mode'] === 'navigate' && request.headers['sec-fetch-dest'] === 'document'
+    if ((request.headers.origin && request.headers.origin !== hosting.origin) || (request.headers['sec-fetch-site'] === 'cross-site' && !linkedNavigation)) {
+      throw new ApiError(403, 'ORIGIN_NOT_ALLOWED', 'This request origin is not allowed.')
+    }
     // Health exposes no configuration or user data and supports hosting probes.
     if ((request.method === 'GET' || request.method === 'HEAD') && pathname === '/api/health') return
     if (!timingSafeEqual(digest(request.headers.authorization ?? ''), expected)) {
@@ -47,7 +52,7 @@ export function protectHostedApp(app: FastifyInstance, hosting: HostingConfig) {
       reply.header('WWW-Authenticate', 'Basic realm="Metaflow demo", charset="UTF-8"')
       throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Sign in to access this demo workspace.')
     }
-    if (pathname === '/api' || pathname.startsWith('/api/')) {
+    if (isApi) {
       await enforce(apiLimit, request, reply)
       if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) await enforce(writeLimit, request, reply)
     }
