@@ -32,7 +32,10 @@ setup is reused for later runs of the same saved version.
 
 ## Deployment
 
-Use Node.js 24 with HTTPS in front of the backend. From the repository root,
+The hosted demo runs as a single Node.js 24 web service on Render, built from the
+`prod` branch (fast-forwarded by CI after checks pass on `main`), with an external
+MySQL-compatible database over `DATABASE_URL` and `DATABASE_SSL`. Use HTTPS in front
+of the backend. From the repository root,
 install with `npm ci`, build with `npm run build`, and start with `npm start`. The backend serves
 `frontend/dist` and `/api` on one domain; page refreshes keep working.
 
