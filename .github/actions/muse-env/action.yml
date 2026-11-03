@@ -1,0 +1,22 @@
+name: Prepare private Muse environment
+description: Read a GitHub secret into a temporary backend environment file for deployment.
+
+inputs:
+  model-api-key:
+    description: The MODEL_API_KEY repository or environment secret.
+    required: true
+
+outputs:
+  env-file:
+    description: Private file path on this runner, available only within this job.
+    value: ${{ steps.prepare.outputs.env-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Write private backend environment
+      id: prepare
+      shell: bash
+      env:
+        MODEL_API_KEY: ${{ inputs.model-api-key }}
+      run: node "$GITHUB_ACTION_PATH/env.mts" prepare
