@@ -1,11 +1,29 @@
 name: Application checks
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   verify:
     runs-on: ubuntu-latest
     services:
@@ -44,9 +62,29 @@ jobs:
         env:
           TEST_DATABASE_URL: mysql://root@127.0.0.1:${{ job.services.mysql.ports[3306] }}/metaflow_test
         run: node --test --test-concurrency=1 tests/database.test.ts tests/webhook-database.test.ts tests/execution-database.test.ts
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+        continue-on-error: true
       - run: npm run lint
         working-directory: frontend
       - run: npm test
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  # Fast-forwards prod to the commit that just passed. Hostinger watches prod and
+  # redeploys on push; no deploy credentials or app secrets exist in GitHub.
+  promote:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [secret-scan, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward prod to this commit
+        run: git push origin "${{ github.sha }}:refs/heads/prod"
