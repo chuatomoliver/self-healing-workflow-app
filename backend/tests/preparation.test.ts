@@ -62,10 +62,41 @@ test('missing connections, missing credentials, and unknown rules stay unresolve
     assert.equal(response.statusCode, 200, response.body)
     const draft = response.json().draft as WorkflowDraft
     assert.equal(workflowSetupSummary({ ...draft.plan, structureReviewed: true }).complete, false)
-    assert.ok(draft.plan.questions.length)
+    assert.equal(draft.plan.questions.length > 0, mode === 'rule')
     if (mode !== 'rule') assert.equal(draft.plan.webhooks[0].configuredBy, undefined)
     if (mode === 'connection') assert.match(draft.plan.webhooks[0].endpoint.urlTemplate, /\.invalid/)
+    if (mode === 'connection') assert.equal(draft.plan.webhooks[0].availability, 'connection-needed')
+    if (mode === 'credential') assert.equal(draft.plan.webhooks[0].availability, 'credential-needed')
   }
+})
+
+test('n8n webhook requirements can be identified and saved before any n8n setup, with business questions kept separate', async (t) => {
+  const output = preparationFixture()
+  const hook = output.extraction.webhooks[0]
+  hook.name = 'n8n purchase review'
+  hook.purpose = 'Pass the purchase request to the downstream n8n workflow.'
+  hook.suggestionReason = 'The requested handoff needs an outgoing webhook that starts the n8n workflow.'
+  output.extraction.nodes[1].app = 'n8n'
+  output.plan.webhookBindings = [{ webhookId: hook.id, connectionId: '' }]
+  output.plan.questions = []
+  let stored = 0
+  const app = buildApp({ repository: { ...repository, create: async (draft) => { stored++; return { ...draft, id: '4bf72532-826c-4354-8bfc-dfb83f299094', version: 1, createdAt: '', updatedAt: '' } } },
+    connections: async () => [supportConnection], prepare: async () => output,
+  }); t.after(() => app.close())
+  const response = await app.inject({ method: 'POST', url: '/api/prepare', payload: { prompt: 'Send the request to n8n to start its downstream automation. Identify the necessary webhook; n8n is not connected.' } })
+  assert.equal(response.statusCode, 200, response.body)
+  const draft = response.json().draft as WorkflowDraft
+  assert.equal(stored, 0)
+  assert.equal(draft.plan.webhooks[0].name, 'n8n purchase review')
+  assert.equal(draft.plan.webhooks[0].availability, 'connection-needed')
+  assert.equal(draft.plan.webhooks[0].connectionId, undefined)
+  assert.deepEqual(draft.plan.webhooks[0].payloadTemplate, { subject: '{{request.subject}}' })
+  assert.equal(draft.plan.questions.length, 0)
+  assert.equal(workflowSetupSummary({ ...draft.plan, structureReviewed: true }).complete, false)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/workflows', payload: draft })).statusCode, 201)
+  assert.equal(stored, 1)
+  Object.assign(draft.plan.webhooks[0], { availability: 'ready' })
+  assert.equal((await app.inject({ method: 'POST', url: '/api/workflows', payload: draft })).statusCode, 400)
 })
 
 test('invalid graph, duplicate/unknown selections, and untrusted extra configuration fail closed without retries', async (t) => {

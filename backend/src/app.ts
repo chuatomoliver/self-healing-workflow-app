@@ -25,9 +25,10 @@ import { createMusePreparer, preparationSchema, draftFromPreparation, bindPlanCo
 import type { MusePreparer, WorkflowPreparation } from './muse/preparation.ts'
 import type { ExecutionService } from './execution/service.ts'
 import { executionRoutes } from './execution/routes.ts'
+import type { SlackSetupRequest, SlackSetupResult } from '../../shared/slack.ts'
 
-type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner; prepare?: MusePreparer; connections?: () => Promise<WebhookConnection[]>; hasWebhookCredential?: (reference: string) => Promise<boolean>; webhookDelivery?: WebhookDeliveryService; execution?: ExecutionService }
-export function buildApp({ repository, logger = false, port = 3001, parse, plan, prepare, connections = async () => [], hasWebhookCredential = async () => false, webhookDelivery, execution }: AppOptions) {
+type AppOptions = { repository: WorkflowRepository; logger?: boolean; port?: number; parse?: MuseParser; plan?: MusePlanner; prepare?: MusePreparer; connections?: () => Promise<WebhookConnection[]>; hasWebhookCredential?: (reference: string) => Promise<boolean>; webhookDelivery?: WebhookDeliveryService; execution?: ExecutionService; setupSlack?: (input: SlackSetupRequest) => Promise<SlackSetupResult> }
+export function buildApp({ repository, logger = false, port = 3001, parse, plan, prepare, connections = async () => [], hasWebhookCredential = async () => false, webhookDelivery, execution, setupSlack }: AppOptions) {
   const app = Fastify({
     logger: logger ? { level: 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -74,6 +75,17 @@ export function buildApp({ repository, logger = false, port = 3001, parse, plan,
   app.get('/api/health', async () => { await repository.health(); return { status: 'ok' } })
   let parsing = false
   app.get('/api/connections', async () => ({ connections: connectionSummaries(await connections()) }))
+  app.get('/api/connections/slack', async () => ({ connections: (await connections())
+    .filter((connection) => connection.authentication.type === 'slack-webhook')
+    .map((connection) => ({ connection, channel: connection.slackChannel ?? '' })) }))
+  app.post<{ Body: SlackSetupRequest }>('/api/connections/slack', {
+    bodyLimit: 8192, schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'channel', 'webhookUrl'], properties: {
+      name: { type: 'string', minLength: 1, maxLength: 200 }, channel: { type: 'string', minLength: 2, maxLength: 81 }, webhookUrl: { type: 'string', minLength: 1, maxLength: 2048 },
+    } } },
+  }, async (request, reply) => {
+    if (!setupSlack) throw new ApiError(503, 'SLACK_SETUP_UNAVAILABLE', 'Slack connection setup is unavailable on this backend.')
+    return reply.code(201).send(await setupSlack(request.body))
+  })
   app.post<{ Body: ParseWorkflowRequest }>('/api/prepare', {
     bodyLimit: MAX_PARSE_BODY_BYTES, schema: { body: parseRequestSchema },
   }, async (request, reply) => {

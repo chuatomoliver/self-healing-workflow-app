@@ -8,6 +8,7 @@ import type { WebhookDeliveryService } from '../webhooks/service.ts'
 import type { RunRepository } from './repository.ts'
 import { availableFields, executeLocalStep, parseProgram, readPath, requiredValue, StepError, validateData, validPath, writePath } from './program.ts'
 import { createMuseCompiler, createMuseRepairer, parseRepair } from '../muse/execution.ts'
+import { workflowFieldCanonicalizer } from '../../../shared/fieldPaths.ts'
 import type { MuseCompiler, MuseRepairer } from '../muse/execution.ts'
 
 const now = () => new Date().toISOString()
@@ -30,6 +31,7 @@ function orderedSteps(workflow: SavedWorkflow): string[] {
   return result
 }
 export function repairChecks(run: WorkflowRun, repair: RunRepair) {
+  const canonical = workflowFieldCanonicalizer(run.snapshot.plan)
   const failed = run.steps.find((step) => step.status === 'failed')
   const missing = failed?.attempts.at(-1)?.error?.missingPath
   const source = validPath(repair.sourcePath) ? readPath(run.context, repair.sourcePath) : undefined
@@ -40,7 +42,7 @@ export function repairChecks(run: WorkflowRun, repair: RunRepair) {
     ...(step.kind === 'validate' ? step.rules.map((rule) => rule.condition.path) : []),
     ...(step.kind === 'branch' ? [step.condition.path] : []),
     ...step.assignments.flatMap((assignment) => assignment.kind === 'copy' ? [assignment.source] : assignment.kind === 'choose' ? [assignment.condition.path] : assignment.kind === 'template' ? [...assignment.template.matchAll(/\{\{([^{}]+)\}\}/g)].map((match) => match[1]) : []),
-    ...(step.kind === 'webhook' ? Object.values(run.snapshot.plan.webhooks.find((hook) => hook.id === run.snapshot.plan.steps.find((item) => item.id === step.stepId)?.webhookTemplateId)?.payloadTemplate ?? {}).map((reference) => reference.slice(2, -2)) : []),
+    ...(step.kind === 'webhook' ? Object.values(run.snapshot.plan.webhooks.find((hook) => hook.id === run.snapshot.plan.steps.find((item) => item.id === step.stepId)?.webhookTemplateId)?.payloadTemplate ?? {}).map((reference) => canonical(reference.slice(2, -2))) : []),
   ]) ?? []
   const earlierResultsUnchanged = !priorReads.some((path) => path === repair.targetPath || path.startsWith(repair.targetPath + '.') || repair.targetPath.startsWith(path + '.'))
   return [
@@ -132,7 +134,8 @@ export function createExecutionService(options: { workflows: WorkflowRepository;
         if (executable.kind === 'webhook') {
           const planStep = run.snapshot.plan.steps.find((step) => step.id === stepId)!
           const hook = run.snapshot.plan.webhooks.find((hook) => hook.id === planStep.webhookTemplateId)!
-          for (const reference of Object.values(hook.payloadTemplate)) requiredValue(result.context, reference.slice(2, -2))
+          const canonical = workflowFieldCanonicalizer(run.snapshot.plan)
+          for (const reference of Object.values(hook.payloadTemplate)) requiredValue(result.context, canonical(reference.slice(2, -2)))
           delivery = await options.delivery.deliver(run.workflowId, hook.id, { requestId: deliveryId!, expectedVersion: run.workflowVersion, sampleData: result.context }, run.snapshot, run.id)
           if (delivery.status !== 'succeeded') throw new StepError(delivery.status === 'unknown' || delivery.status === 'pending' ? 'DELIVERY_UNKNOWN' : 'RECEIVER_REJECTED', delivery.httpStatus ? `The receiver returned HTTP ${delivery.httpStatus}.` : 'The delivery outcome is uncertain. Check the receiver before retrying.')
         }

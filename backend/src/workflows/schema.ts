@@ -12,13 +12,13 @@ const webhookProperties = {
   event: text(200, 1), purpose: text(), suggestionReason: text(),
   endpoint: object({ kind: choice('managed', 'external'), urlTemplate: text(2048, 1) }),
   authentication: object({
-    type: choice('signature', 'secret-header'),
+    type: choice('signature', 'secret-header', 'slack-webhook'),
     headerName: { ...text(100, 1), pattern: '^[A-Za-z0-9-]+$' },
     secretRef: id,
   }),
   payloadTemplate: { type: 'object', maxProperties: 100, propertyNames: id, additionalProperties: text() },
 }
-const webhook = object({ ...webhookProperties, suggestedBy: choice('muse'), configuredBy: choice('muse'), connectionId: id, setup: object({ endpointReviewed: { type: 'boolean' }, authenticationReviewed: { type: 'boolean' }, payloadReviewed: { type: 'boolean' } }) }, Object.keys(webhookProperties))
+const webhook = object({ ...webhookProperties, suggestedBy: choice('muse'), configuredBy: choice('muse'), connectionId: id, availability: choice('connection-needed', 'credential-needed', 'receiver-needed'), setup: object({ endpointReviewed: { type: 'boolean' }, authenticationReviewed: { type: 'boolean' }, payloadReviewed: { type: 'boolean' } }) }, Object.keys(webhookProperties))
 export const draftSchema = object({
   prompt: text(4000),
   diagram: object({

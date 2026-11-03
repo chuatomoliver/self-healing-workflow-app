@@ -4,7 +4,7 @@ import { Icon } from '../../../components/ui/Icon'
 import { NodeRoleBadge } from '../../diagram-parsing/components/NodeRoleBadge'
 import type { PlanStep, PlanWebhookTemplate, WebhookConnectionState, WorkflowPlan } from '../types'
 import { WebhookStatus } from './WebhookStatus'
-import { stepSetupIssues } from '../../../../../shared/setup.ts'
+import { stepSetupIssues, webhookSetupIssues } from '../../../../../shared/setup.ts'
 
 type PlanStepDetailsProps = {
   step: PlanStep
@@ -33,7 +33,7 @@ export function PlanStepDetails({ step, plan, containerRef, webhookConnections, 
         <p className="mt-1 text-xs font-medium">{step.operation}</p>
         <p className="mt-1 text-[10px] text-muted">{webhook ? `${webhook.name} · ${webhook.direction} webhook` : 'Workflow logic'}</p>
       </div>
-      {webhook && <div className="flex flex-wrap items-center gap-3"><WebhookStatus template={webhook} state={webhookConnections[webhook.id]} /><Button variant="text" size="inline" onClick={() => onReviewWebhook(webhook)}>View webhook<Icon name="arrow" width="12" height="12" /></Button></div>}
+      {webhook && <div className="flex flex-wrap items-center gap-3"><WebhookStatus template={webhook} state={webhookConnections[webhook.id]} />{webhookSetupIssues(webhook).length ? <a href="#webhooks-heading" className="text-[10px] font-semibold text-accent hover:underline">View suggestion</a> : <Button variant="text" size="inline" onClick={() => onReviewWebhook(webhook)}>View webhook<Icon name="arrow" width="12" height="12" /></Button>}</div>}
     </div>
 
     <div className="mt-5">

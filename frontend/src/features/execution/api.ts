@@ -3,6 +3,7 @@ const messages: Record<string, string> = {
   EXECUTION_NOT_CONFIGURED: 'The backend needs to be restarted with the workflow runner enabled.',
   EXECUTION_UNSUPPORTED: 'This runner supports manual input, validation, transformations, decisions, and outgoing webhooks, up to 40 steps. Other actions need an enabled connector.',
   RUN_SETUP_REQUIRED: 'Complete the setup and save your draft before running.', VERSION_CONFLICT: 'Reopen the latest saved workflow before starting a run.',
+  EXECUTION_CACHE_UNAVAILABLE: 'The local execution setup cache is unavailable. Check the backend before trying again.',
   RUN_ID_CONFLICT: 'This request ID was already used with different input.', RUN_CHANGED: 'This run changed. Refresh it before continuing.',
   RUN_NOT_FOUND: 'This run could not be found.', RUN_BUSY: 'Wait for an active operation to finish.', RUN_FINISHED: 'This run has already finished.',
   RUN_INPUT_INVALID: 'Check the run data and use ordinary JSON field names.', RUN_INPUT_TOO_LARGE: 'Run data must fit within 32 KB.',

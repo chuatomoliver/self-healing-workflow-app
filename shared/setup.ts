@@ -3,12 +3,15 @@ import type {
   PlanWebhookTemplate,
   WorkflowPlan,
 } from "./workflows.ts";
+import { SLACK_ENDPOINT, SLACK_REFERENCE_HEADER } from './slack.ts';
 
 export const fieldReferencePattern =
   /^\{\{[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*){1,8}\}\}$/;
 export function webhookAddressIssue(address: string): string | null {
   try {
     const url = new URL(address.trim());
+    if (url.hostname === 'hooks.slack.com' && address.trim() !== SLACK_ENDPOINT)
+      return 'Use Set up Slack to store the secret webhook URL securely.';
     if (
       (url.protocol !== "https:" && !(url.protocol === "http:" && url.hostname === "127.0.0.1" && url.port)) ||
       url.username ||
@@ -33,6 +36,9 @@ export function webhookEndpointIssue(template: PlanWebhookTemplate): string | nu
 export function webhookAuthenticationIssue(
   template: PlanWebhookTemplate,
 ): string | null {
+  if (template.authentication.type === 'slack-webhook'
+    && (template.endpoint.urlTemplate !== SLACK_ENDPOINT || template.authentication.headerName !== SLACK_REFERENCE_HEADER))
+    return 'Use Set up Slack to configure this saved connection.';
   if (!/^[A-Za-z0-9-]{1,100}$/.test(template.authentication.headerName))
     return "Enter a valid authentication header name.";
   if (

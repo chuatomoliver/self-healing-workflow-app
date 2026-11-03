@@ -4,6 +4,19 @@ import mysql from 'mysql2/promise'
 import type { Pool, RowDataPacket } from 'mysql2/promise'
 import type { Config } from './config.ts'
 
+export async function ensureLocalDatabase(config: Config) {
+  if (!config.localDatabase) return
+  // Only development's fixed local default is created automatically. Explicit
+  // connection URLs keep their existing database and permission requirements.
+  const connection = await mysql.createConnection({
+    host: '127.0.0.1', port: 3306, user: 'root', password: '', connectTimeout: 5000,
+    ssl: config.databaseSsl ? { rejectUnauthorized: true, verifyIdentity: true } : undefined,
+  })
+  try {
+    await connection.query('CREATE DATABASE IF NOT EXISTS metaflow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')
+  } finally { await connection.end() }
+}
+
 export function createPool(config: Pick<Config, 'databaseUrl' | 'databaseSsl'>) {
   const url = new URL(config.databaseUrl)
   const pool = mysql.createPool({

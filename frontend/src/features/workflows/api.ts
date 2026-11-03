@@ -1,4 +1,5 @@
 import type { ApiErrorResponse, SavedWorkflow, WorkflowDraft, WorkflowSummary } from '../../../../shared/workflows.ts'
+import type { SlackSetupRequest, SlackSetupResult } from '../../../../shared/slack.ts'
 
 export class WorkflowApiError extends Error {
   status: number
@@ -35,11 +36,26 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       INVALID_WORKFLOW: 'The workflow has invalid or inconsistent references. Review its diagram and plan.',
       INVALID_REQUEST: 'Check the workflow fields and limits: title up to 200 characters and description up to 4,000.',
       PAYLOAD_TOO_LARGE: 'This workflow is too large to save. Reduce its size and try again.',
+      SLACK_SETUP_INVALID: 'Enter a connection name, a channel such as #general, and a valid Slack incoming webhook URL.',
+      SLACK_CREDENTIAL_UNAVAILABLE: 'Could not save the webhook in Windows Credential Manager. Check the backend runs under your Windows account.',
+      SLACK_CONNECTION_UNAVAILABLE: 'Could not save the Slack connection. Check the saved connections file and its permissions.',
+      SLACK_SETUP_UNAVAILABLE: 'Restart the backend to enable Slack setup.',
     }
     throw new WorkflowApiError((code && messages[code]) || 'The backend could not complete the request. Please try again.', response.status, code ?? 'REQUEST_FAILED')
   }
   if (!data || typeof data !== 'object') throw new WorkflowApiError('The backend returned an unexpected response.', response.status, 'INVALID_RESPONSE')
   return data as T
+}
+export async function listSlackConnections(signal?: AbortSignal) {
+  const result = await request<{ connections: SlackSetupResult[] }>('/connections/slack', { signal })
+  if (!Array.isArray(result.connections)) throw new WorkflowApiError('Could not read saved Slack connections.', 200, 'INVALID_RESPONSE')
+  return result.connections
+}
+export async function setupSlackConnection(input: SlackSetupRequest) {
+  const result = await request<SlackSetupResult>('/connections/slack', { method: 'POST', body: JSON.stringify(input) })
+  if (!result.connection?.id || result.connection.authentication?.type !== 'slack-webhook' || !result.channel)
+    throw new WorkflowApiError('Could not read the saved Slack connection.', 200, 'INVALID_RESPONSE')
+  return result
 }
 export async function listWorkflows(signal?: AbortSignal) {
   const data = await request<{ workflows: WorkflowSummary[] }>('/workflows', { signal })

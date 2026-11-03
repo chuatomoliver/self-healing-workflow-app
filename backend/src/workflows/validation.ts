@@ -1,6 +1,7 @@
 import type { DiagramEdge, WorkflowDraft } from '../../../shared/workflows.ts'
 import { ApiError } from '../errors.ts'
 import { stepSetupIssues, webhookAuthenticationIssue, webhookEndpointIssue, webhookMappingsIssue, webhookPayloadIssue } from '../../../shared/setup.ts'
+import { SLACK_ENDPOINT } from '../../../shared/slack.ts'
 
 function invalid(message: string): never { throw new ApiError(400, 'INVALID_WORKFLOW', message) }
 function unique(items: { id: string }[], label: string) {
@@ -57,6 +58,10 @@ export function validateDraft(draft: WorkflowDraft, localReceiverUrl?: string) {
   for (const webhook of plan.webhooks) {
     let url: URL
     try { url = new URL(webhook.endpoint.urlTemplate) } catch { invalid('Webhook endpoint templates must be valid HTTPS URLs.') }
+    if (url.hostname === 'hooks.slack.com' && webhook.endpoint.urlTemplate !== SLACK_ENDPOINT)
+      invalid('Use Slack connection setup to store the secret webhook URL outside the workflow.')
+    if (webhook.authentication.type === 'slack-webhook' && (webhook.direction !== 'outgoing' || !webhook.connectionId || webhookAuthenticationIssue(webhook)))
+      invalid('Slack delivery requires a saved outgoing Slack connection.')
     const localReceiver = localReceiverUrl && url.href === localReceiverUrl && url.protocol === 'http:' && url.hostname === '127.0.0.1'
     if ((!localReceiver && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) {
       invalid('Webhook templates require HTTPS without embedded credentials, query strings, or fragments.')
