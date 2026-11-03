@@ -1,0 +1,11 @@
+{
+  "name": "metaflow",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "postinstall": "npm ci --prefix backend --omit=dev && npm ci --prefix frontend --include=dev",
+    "build": "npm run build --prefix frontend",
+    "start": "npm start --prefix backend"
+  }
+}

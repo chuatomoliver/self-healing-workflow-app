@@ -13,6 +13,7 @@ import { createExecutionService } from './execution/service.ts'
 import { createMuseCompiler, createMuseRepairer } from './muse/execution.ts'
 import { createSlackSetup } from './webhooks/slack.ts'
 import { createExecutionProgramCache } from './execution/program-cache.ts'
+import { fileURLToPath } from 'node:url'
 
 let app: ReturnType<typeof buildApp> | undefined
 let pool: ReturnType<typeof createPool> | undefined
@@ -30,10 +31,11 @@ try {
   const diagnostics = { onResponse: (details: import('./muse/client.ts').MuseResponseDetails) => { app?.log.info(details, 'Muse response') } }
   const execution = createExecutionService({ workflows: repository, runs: mysqlRuns(pool), delivery: webhookDelivery, compile: createMuseCompiler({ ...diagnostics, cache: createExecutionProgramCache() }), repair: createMuseRepairer(diagnostics) })
   await execution.recover()
-  app = buildApp({ repository, webhookDelivery, execution, connections: loadConnections, hasWebhookCredential: async (reference) => !!await loadWebhookSecret(reference), setupSlack: createSlackSetup(), logger: config.logLevel !== 'silent', port: config.port })
+  app = buildApp({ repository, webhookDelivery, execution, connections: loadConnections, hasWebhookCredential: async (reference) => !!await loadWebhookSecret(reference), setupSlack: createSlackSetup(), logger: config.logLevel !== 'silent', port: config.port,
+    hosting: config.hosting, frontendRoot: config.hosting ? fileURLToPath(new URL('../../frontend/dist/', import.meta.url)) : undefined })
   app.addHook('preClose', async () => { await execution.drain() })
   app.addHook('onClose', async () => { await pool?.end() })
-  await app.listen({ port: config.port, host: '127.0.0.1' })
+  await app.listen({ port: config.port, host: config.host })
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void app?.close() })
 } catch (error) {
   // Configuration errors contain field names only. Never print raw database errors.

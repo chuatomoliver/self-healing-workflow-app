@@ -33,3 +33,21 @@ test('development preserves explicit database configuration without creating a d
   assert.equal(config.databaseSsl, true)
   assert.throws(() => readConfig({ DATABASE_URL: 'invalid' }, { localDatabase: true }))
 })
+
+const deployed = { ...base, NODE_ENV: 'production', APP_ORIGIN: 'https://demo.example', DEMO_USERNAME: 'team', DEMO_PASSWORD: 'example-password-for-tests' }
+
+test('production requires an HTTPS origin and demo login and never creates a local database', () => {
+  const config = readConfig(deployed, { localDatabase: true })
+  assert.equal(config.host, '0.0.0.0')
+  assert.equal(config.localDatabase, false)
+  assert.equal(config.hosting?.origin, 'https://demo.example')
+  assert.equal(readConfig({ ...deployed, HOST: '127.0.0.1' }).host, '127.0.0.1')
+  for (const overrides of [
+    { APP_ORIGIN: '' }, { APP_ORIGIN: 'http://demo.example' }, { APP_ORIGIN: 'https://demo.example/path' },
+    { APP_ORIGIN: 'https://team:private-password@demo.example' }, { DEMO_USERNAME: '' },
+    { DEMO_PASSWORD: '' }, { DEMO_PASSWORD: 'short' }, { DATABASE_URL: '' }, { HOST: '0.0.0.0/path' },
+  ]) assert.throws(() => readConfig({ ...deployed, ...overrides }, { localDatabase: true }),
+    (error: unknown) => error instanceof Error && !error.message.includes('private-password'))
+  assert.throws(() => readConfig({ ...base, HOST: '0.0.0.0' }))
+  assert.equal(readConfig(base).host, '127.0.0.1')
+})

@@ -33,8 +33,10 @@ uncertain delivery needs a receiver check before starting another run.
 
 Manual-input workflows with validation, field transformations, decisions, and
 outgoing webhooks. Incoming event receivers, native app/OAuth connectors, loops,
-parallel execution, and shared team access are still being built. Unsupported
+parallel execution, and separate user accounts are still being built. Unsupported
 steps are reported before execution starts.
+
+For a password-protected hosted demo, see [deployment](backend/README.md#deployment).
 
 For installation, see the [setup guide](backend/README.md#setup). More details are
 available in the [app guide](frontend/README.md) and [backend guide](backend/README.md).
