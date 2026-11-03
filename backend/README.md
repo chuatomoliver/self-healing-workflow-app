@@ -94,12 +94,14 @@ server process. Never publish secrets, put them in `VITE_*`, or log them. The
 The browser asks for the demo login. Everyone shares workflows and run history;
 this is a single demo workspace, not separate user accounts.
 
-Windows-saved Muse/Slack credentials do not transfer. Slack needs
-`WEBHOOK_CONNECTIONS_FILE` on persistent private storage, which free Render instances
-do not have, so the catalog is lost on each restart or redeploy. Use a paid instance
-with a disk for Slack. Also set its matching `WEBHOOK_SECRET_<reference>` and allow
-`https://hooks.slack.com` in `WEBHOOK_ALLOWED_ORIGINS`. The in-app Slack setup
-currently uses Windows.
+Use **Set up connection** on any outgoing webhook card, including Slack, at any
+node count. Save a full URL and optional header token or HMAC secret. Windows uses
+Credential Manager; Linux/macOS use owner-only files outside the app, defaulting
+to `~/.config/Metaflow/webhook-secrets`. Keep `WEBHOOK_SECRETS_DIR` and
+`WEBHOOK_CONNECTIONS_FILE` on persistent private storage; ephemeral hosting loses
+these on restart/redeploy. Existing environment credentials still work.
+This setup sends JSON over POST to HTTPS webhooks. Incoming receivers, OAuth, and
+service-specific payload formats still need their own supported integration.
 
 ## Checks
 

@@ -36,10 +36,10 @@ export function isPublicAddress(address: string): boolean {
   }
   return false
 }
-export async function pinDestination(value: string, policy: DestinationPolicy, resolve: ResolveAddresses = (hostname) => lookup(hostname, { all: true, verbatim: true })): Promise<PinnedDestination> {
+export async function pinDestination(value: string, policy: DestinationPolicy, resolve: ResolveAddresses = (hostname) => lookup(hostname, { all: true, verbatim: true }), allowPrivateQuery = false): Promise<PinnedDestination> {
   let url: URL
   try { url = new URL(value) } catch { throw blocked() }
-  if (url.username || url.password || url.search || url.hash || /[{}]/.test(value)) throw blocked()
+  if (url.username || url.password || (url.search && !allowPrivateQuery) || url.hash || /[{}]/.test(value)) throw blocked()
   if (policy.localReceiverUrl && url.href === policy.localReceiverUrl && url.protocol === 'http:' && url.hostname === '127.0.0.1') return { url, address: '127.0.0.1', family: 4 }
   if (url.protocol !== 'https:' || !policy.allowedOrigins.includes(url.origin) || url.hostname.endsWith('.invalid')) throw blocked()
   const hostname = url.hostname.replace(/^\[|\]$/g, '')

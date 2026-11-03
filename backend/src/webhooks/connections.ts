@@ -23,7 +23,7 @@ export function parseConnections(value: unknown): WebhookConnection[] {
       || typeof item.endpointUrl !== 'string' || item.endpointUrl.length > 2048
       || !item.authentication || typeof item.authentication !== 'object' || Array.isArray(item.authentication)
       || Object.keys(item.authentication).sort().join(',') !== 'headerName,secretRef,type'
-      || !['signature', 'secret-header', 'slack-webhook'].includes(item.authentication.type)
+      || !['signature', 'secret-header', 'slack-webhook', 'stored-webhook'].includes(item.authentication.type)
       || typeof item.authentication.headerName !== 'string' || typeof item.authentication.secretRef !== 'string') return fail()
     if (item.authentication.type === 'slack-webhook' ? typeof item.slackChannel !== 'string' || !/^#[a-zA-Z0-9_-]{1,80}$/.test(item.slackChannel) : Object.hasOwn(item, 'slackChannel')) return fail()
     const template = { endpoint: { urlTemplate: item.endpointUrl }, authentication: item.authentication }

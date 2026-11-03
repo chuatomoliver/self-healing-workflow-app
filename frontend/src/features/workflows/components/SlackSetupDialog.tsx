@@ -54,7 +54,7 @@ export function SlackSetupDialog({ plan, onApply, onConnected, onClose }: Props)
         <label className="mt-3 block text-xs font-medium">Channel selected in Slack<input className={setupInput} placeholder="#general" value={channel} maxLength={81} required disabled={busy} onChange={(event) => setChannel(event.target.value)} /></label>
         <p className="mt-2 text-[11px] leading-relaxed text-muted">Enter the channel you chose when creating the webhook. This label does not change its destination.</p>
         <label className="mt-3 block text-xs font-medium">Slack webhook URL<input className={setupInput} type="password" autoComplete="off" spellCheck={false} placeholder="https://hooks.slack.com/services/…" value={webhookUrl} maxLength={2048} required disabled={busy} onChange={(event) => setWebhookUrl(event.target.value)} /></label>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted">Stored in Windows Credential Manager. The secret URL is excluded from your saved workflow and Muse requests.</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">Stored privately on the backend. The secret URL is excluded from your saved workflow and Muse requests.</p>
         <a className="mt-2 inline-block text-[11px] text-accent underline" href="https://api.slack.com/apps" target="_blank" rel="noreferrer">Get a webhook: Your app → Incoming Webhooks → Add New Webhook to Workspace</a>
       </>}
       {!onConnected && <><label className="mt-4 block text-xs font-medium">Message<textarea className={setupInput} rows={3} value={message} maxLength={4000} required disabled={busy} placeholder="Hello team! This is a test notification." onChange={(event) => setMessage(event.target.value)} /></label>

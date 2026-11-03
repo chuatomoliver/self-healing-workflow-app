@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { SLACK_ENDPOINT, SLACK_REFERENCE_HEADER, validSlackWebhookUrl } from '../../../shared/slack.ts'
 import type { SlackSetupRequest, SlackSetupResult } from '../../../shared/slack.ts'
-import { createWindowsCredentialStore } from '../muse/credential-store.ts'
+import { createWebhookCredentialStore } from './credentials.ts'
 import type { MuseCredentialStore } from '../muse/credential-store.ts'
 import { ApiError } from '../errors.ts'
 import { saveConnection } from './connections.ts'
@@ -16,14 +16,14 @@ export function createSlackSetup(options: {
     if (!name || name.length > 200 || !/^#[a-zA-Z0-9_-]{1,80}$/.test(channel) || !validSlackWebhookUrl(webhookUrl))
       throw new ApiError(400, 'SLACK_SETUP_INVALID', 'Enter a connection name, a channel such as #general, and a Slack incoming webhook URL.')
     const id = `slack_${randomUUID()}`
-    const store = (options.credentialStore ?? createWindowsCredentialStore)(`Metaflow/Webhook/${id}`)
+    const store = options.credentialStore ? options.credentialStore(`Metaflow/Webhook/${id}`) : createWebhookCredentialStore(id, options.env)
     const connection = {
       id, name, description: `Send Slack messages to ${channel} using an incoming webhook. The destination channel is fixed by the webhook created in Slack.`,
       endpointUrl: SLACK_ENDPOINT, slackChannel: channel,
       authentication: { type: 'slack-webhook' as const, headerName: SLACK_REFERENCE_HEADER, secretRef: id },
     }
     try { await store.write(webhookUrl) }
-    catch { throw new ApiError(503, 'SLACK_CREDENTIAL_UNAVAILABLE', 'Could not save the webhook in Windows Credential Manager. Check that the backend runs under your Windows account.') }
+    catch { throw new ApiError(503, 'SLACK_CREDENTIAL_UNAVAILABLE', 'Could not save the webhook privately. Check backend credential storage and its permissions.') }
     try { await saveConnection(connection, options.env) }
     catch {
       await store.remove().catch(() => {})
